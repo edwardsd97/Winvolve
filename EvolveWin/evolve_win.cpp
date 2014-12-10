@@ -128,9 +128,9 @@ void draw(HWND hwnd, int step, int refresh)
 				draw_text(hdc, &rect, "Generations:", RGB(200, 200, 200));
 				rect.left += 175;
 				draw_text(hdc, &rect, "Species:", RGB(200, 200, 200));
-				rect.left += 120;
+				rect.left += 125;
 				draw_text(hdc, &rect, "Extinctions:", RGB(200, 200, 200));
-				rect.left += 150;
+				rect.left += 145;
 				draw_text(hdc, &rect, "Mass Extincts:", RGB(200, 200, 200));
 				rect.left += 160;
 				draw_text(hdc, &rect, "Predation:", RGB(200, 200, 200));
@@ -163,20 +163,37 @@ void draw(HWND hwnd, int step, int refresh)
 			}
 		}
 
-		for (i = 0; i < SPECIES_HIST_X; i++)
+		for (i = 0; i < g_EvolveState.parms.popCols; i++)
 		{
-			for (j = 0; j < SPECIES_HIST_Y; j++)
+			if (!g_EvolveState.record[i][0].creature.genes[0])
+				continue;
+
+			int spc = 4;
+			int oldest = 0;
+			int width = ((g_EvolveState.parms.genes + 1) * 10) - spc;
+			for (j = 0; j < g_EvolveState.parms.popCols; j++)
 			{
-				if (g_EvolveState.record[i][j].creature.genes[0])
-				{
-					rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
-					rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i);
-					draw_creature(hdc, &rect, &g_EvolveState.record[i][j].environment);
-					rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
-					rect.top += 20;
-					draw_creature(hdc, &rect, &g_EvolveState.record[i][j].creature);
-				}
+				if (!g_EvolveState.record[i][j].creature.genes[0])
+					break;
+
+				oldest = g_EvolveState.record[i][j].generation;
+
+				rect.left = 5 + (j * width);
+				rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i);
+				g_EvolveState.record[i][j].environment.age = g_EvolveState.record[i][j].creature.age + 1;
+				draw_creature(hdc, &rect, &g_EvolveState.record[i][j].environment);
+				rect.left = 5 + (j * width);
+				rect.top += 20;
+				draw_creature(hdc, &rect, &g_EvolveState.record[i][j].creature);
 			}
+
+			rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i) + 10;
+			rect.left = 5 + (j * width);
+			sprintf(msg, "%i", (oldest - g_EvolveState.record[i][0].generation) + 1);
+			if (g_EvolveState.record[i][0].creature.age == 0)
+				draw_text(hdc, &rect, msg, RGB(200, 200, 200));
+			else
+				draw_text(hdc, &rect, msg, RGB(128, 128, 128));
 		}
 	}
 
@@ -196,10 +213,10 @@ void draw(HWND hwnd, int step, int refresh)
 		rect.left += 140;
 		sprintf(msg, "%i/%i", g_EvolveState.speciesNow, g_EvolveState.speciesEver);
 		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
-		rect.left += 155;
+		rect.left += 160;
 		sprintf(msg, "%i", g_EvolveState.extinctions);
 		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
-		rect.left += 170;
+		rect.left += 165;
 		sprintf(msg, "%i", g_EvolveState.massExtinctions);
 		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
 		rect.left += 121;

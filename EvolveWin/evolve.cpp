@@ -285,12 +285,12 @@ void record_species(creature_t *creature, int generation, int alive)
 
 	evolve_state_t *state = creature->state;
 
-	for (x = 0; x < SPECIES_HIST_X; x++)
+	for (x = 0; x < state->parms.popCols; x++)
 	{
 		if (!state->record[x][0].generation && open < 0)
 			open = x;
 
-		for (y = 0; y < SPECIES_HIST_Y; y++)
+		for (y = 0; y < state->parms.popCols; y++)
 		{
 			if (!state->record[x][y].generation)
 				break;
@@ -304,7 +304,7 @@ void record_species(creature_t *creature, int generation, int alive)
 			
 		if (state->record[x][0].creature.species == creature->species)
 		{
-			for (y = 0; state->record[x][y].creature.species == creature->species && y < SPECIES_HIST_Y; y++)
+			for (y = 0; state->record[x][y].creature.species == creature->species && y < state->parms.popCols; y++)
 			{
 				if (state->record[x][y].generation == generation)
 					return;
@@ -317,20 +317,36 @@ void record_species(creature_t *creature, int generation, int alive)
 	if (open < 0)
 		open = oldestIdx;
 
-	if ( open >= 0 && x >= SPECIES_HIST_X)
+	if (open >= 0 && x >= state->parms.popCols)
 	{
 		// Start a new slot
 		x = open;
 		y = 0;
-		memset(state->record[x], 0, sizeof(state->record[x]));
+		memset(state->record[x], 0, sizeof(creature_t) * SPECIES_HIST_COLS);
 	}
 
-	if ( x < SPECIES_HIST_X && y < SPECIES_HIST_Y)
+	if (x < state->parms.popCols )
 	{
+		// Shift down records if necessary (except the first one)
+		if (y >= state->parms.popCols)
+		{
+			for (y = 1; y < state->parms.popCols - 1; y++)
+				memcpy(&state->record[x][y], &state->record[x][y + 1], sizeof(species_record_t));
+			y = state->parms.popCols - 1;
+		}
+
 		// Add record
 		state->record[x][y].generation = generation;
 		memcpy(&state->record[x][y].creature, creature, sizeof(creature_t));
 		memcpy(&state->record[x][y].environment, &state->environment[creature_col(creature)], sizeof(creature_t));
+
+		state->record[x][y].creature.age = 0;
+
+		if (!alive)
+		{
+			for (y = 0; y < state->parms.popCols; y++)
+				state->record[x][y].creature.age = (state->parms.ageDeath / 2);
+		}
 	}
 }
 
@@ -572,13 +588,14 @@ void procreate(creature_t *creature)
 
 void current_population( evolve_state_t *state )
 {
-	unsigned i;
-	unsigned j;
+	int i;
+	int j;
 	int speciesList[POP_MAX];
 	state->speciesNow = 0;
 	state->population[0] = 0;
 	state->population[1] = 0;
-	for ( i = 0; i < (unsigned) state->popSize; i++)
+
+	for ( i = 0; i < state->popSize; i++)
 	{
 		if (state->creatures[i].genes[0] == 0)
 			continue;
@@ -588,7 +605,7 @@ void current_population( evolve_state_t *state )
 		else
 			state->population[1]++;
 
-		for (j = 0; j < state->speciesNow; j++)
+		for (j = 0; j < (int) state->speciesNow; j++)
 		{
 			if (state->creatures[i].species == speciesList[j])
 				break;
@@ -764,13 +781,14 @@ void evolve_simulate(evolve_state_t *state)
 		state->generation++;
 		if (state->generation % state->parms.envChangeRate == 0)
 		{
-			random_environments(state, state->environment, state->parms.popCols);
-			randomize_order(state);
 			for (int i = 0; i < state->popSize; i++)
 			{
 				if (state->creatures[i].genes[0])
 					record_species(&state->creatures[i], state->generation,1);
 			}
+
+			random_environments(state, state->environment, state->parms.popCols);
+			randomize_order(state);
 		}
 
 		state->rebirth--;

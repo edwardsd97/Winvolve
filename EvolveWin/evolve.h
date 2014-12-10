@@ -1,11 +1,11 @@
 
-#define GENES_MAX		(32)
-#define MAX_ALPHABET	(64)
-#define POP_ROWS_MAX	(32)
-#define POP_COLS_MAX	(32)
-#define POP_MAX			(POP_ROWS_MAX*POP_COLS_MAX)
-#define SPECIES_HIST_X	(8)
-#define SPECIES_HIST_Y	(16)
+#define GENES_MAX			(32)
+#define MAX_ALPHABET		(64)
+#define POP_ROWS_MAX		(32)
+#define POP_COLS_MAX		(32)
+#define POP_MAX				(POP_ROWS_MAX*POP_COLS_MAX)
+#define SPECIES_HIST_ROWS	(POP_ROWS_MAX/4)
+#define SPECIES_HIST_COLS	(POP_COLS_MAX)
 
 struct evolve_state_s;
 struct evolve_parms_s;
@@ -65,7 +65,7 @@ typedef struct evolve_state_s
 	int				alphabet_size;
 	int				orderTable[POP_MAX];
 
-	species_record_s record[SPECIES_HIST_X][SPECIES_HIST_Y];
+	species_record_s record[SPECIES_HIST_ROWS][SPECIES_HIST_COLS];
 
 	creature_t		creatureLastAlive[2];
 	int				creatureLastAliveIdx[2];
