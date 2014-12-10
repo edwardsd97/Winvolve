@@ -68,7 +68,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 			g_Refresh = 0;
 
 			// Clamp to a maximum generations per second
-			int generationsPerSecond = 2;
+			int generationsPerSecond = 3;
 			clock_t start = clock();
 			evolve_win_tick(hWnd, refresh);
 			clock_t end = clock();
