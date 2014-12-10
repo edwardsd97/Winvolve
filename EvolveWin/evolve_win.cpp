@@ -162,6 +162,22 @@ void draw(HWND hwnd, int step, int refresh)
 				draw_creature(hdc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
 			}
 		}
+
+		for (i = 0; i < SPECIES_HIST_X; i++)
+		{
+			for (j = 0; j < SPECIES_HIST_Y; j++)
+			{
+				if (g_EvolveState.record[i][j].creature.genes[0])
+				{
+					rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
+					rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i);
+					draw_creature(hdc, &rect, &g_EvolveState.record[i][j].environment);
+					rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
+					rect.top += 20;
+					draw_creature(hdc, &rect, &g_EvolveState.record[i][j].creature);
+				}
+			}
+		}
 	}
 
 	i = (step % g_EvolveState.popSize) / g_EvolveState.parms.popCols;

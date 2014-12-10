@@ -4,6 +4,8 @@
 #define POP_ROWS_MAX	(32)
 #define POP_COLS_MAX	(32)
 #define POP_MAX			(POP_ROWS_MAX*POP_COLS_MAX)
+#define SPECIES_HIST_X	(8)
+#define SPECIES_HIST_Y	(16)
 
 struct evolve_state_s;
 struct evolve_parms_s;
@@ -34,6 +36,15 @@ typedef struct evolve_parms_s
 
 } evolve_parms_t;
 
+typedef struct species_record_s
+{
+	int				generation;
+	creature_t		creature;
+	creature_t		environment;
+
+} species_record_t;
+
+
 typedef struct evolve_state_s
 {
 	evolve_parms_t	parms;
@@ -53,6 +64,8 @@ typedef struct evolve_state_s
 	int				step;
 	int				alphabet_size;
 	int				orderTable[POP_MAX];
+
+	species_record_s record[SPECIES_HIST_X][SPECIES_HIST_Y];
 
 	creature_t		creatureLastAlive[2];
 	int				creatureLastAliveIdx[2];

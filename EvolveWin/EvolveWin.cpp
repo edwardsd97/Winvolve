@@ -131,7 +131,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    int dwStyle = (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX);
 
    hWnd = CreateWindow(szWindowClass, szTitle, dwStyle,
-      CW_USEDEFAULT, 0, 750, 565, NULL, NULL, hInstance, NULL);
+      CW_USEDEFAULT, 0, 750, 930, NULL, NULL, hInstance, NULL);
 
    if (!hWnd)
    {
