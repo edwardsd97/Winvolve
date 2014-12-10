@@ -217,7 +217,12 @@ void evolve_win_tick(HWND hwnd, int refresh)
 {
 	if (!initialized)
 	{
-		evolve_init(&g_EvolveState);
+		evolve_parms_t parms;
+
+		evolve_parms_default(&parms);
+
+		evolve_init(&g_EvolveState, &parms);
+
 		initialized = true;
 	}
 

@@ -404,8 +404,6 @@ void random_environments(evolve_state_t *state, creature_t *envs, int count)
 
 		envs[j].genes[state->parms.genes] = 0;
 	}
-
-	//strcpy(environment.genes, "aaaaaaaa");
 }
 
 
@@ -593,29 +591,30 @@ void evolve_rebirth(evolve_state_t *state,bool randomizeEnvironment)
 	state->rebirth = state->parms.rebirthGenerations;
 }
 
+void evolve_parms_default(evolve_parms_t *parms)
+{
+	parms->ageDeath				= 5;
+	parms->ageMature			= 2;
+	parms->rebirthGenerations	= 10;
+	parms->predationLevel		= 0.9f;
+	parms->speciesMatch			= 0.5f;
+	parms->speciesNew			= 6;
+	parms->popRows				= 22;
+	parms->popCols				= 8;
+	parms->envChangeRate		= 100;
+
+	strcpy(parms->alphabet, "abcdefghABCDEFGH");
+	parms->genes = 8;
+}
+
 bool evolve_init(evolve_state_t *state, evolve_parms_t *parms)
 {
 	memset(state, 0, sizeof(evolve_state_t));
 
 	if (!parms)
-	{
-		state->parms.ageDeath			= 5;
-		state->parms.ageMature			= 2;
-		state->parms.rebirthGenerations = 10;
-		state->predation			= 0.9f;
-		state->parms.speciesMatch		= 0.5f;
-		state->parms.speciesNew			= 6;
-		state->parms.genes				= 8;
-		state->parms.popRows			= 22;
-		state->parms.popCols			= 8;
-		state->parms.envChangeRate		= 100;
-
-		strcpy(state->parms.alphabet, "abcdefghABCDEFGH");
-	}
+		evolve_parms_default(&state->parms);
 	else
-	{ 
 		state->parms = *parms;
-	}
 
 	if (state->parms.genes > GENES_MAX)
 		return false;
@@ -627,6 +626,7 @@ bool evolve_init(evolve_state_t *state, evolve_parms_t *parms)
 		return false;
 
 	state->generation = 1;
+	state->predation = state->parms.predationLevel;
 	state->alphabet_size = strlen(state->parms.alphabet);
 	state->popSize = state->parms.popRows * state->parms.popCols;
 

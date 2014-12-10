@@ -5,6 +5,7 @@
 #include "EvolveWin.h"
 #include "evolve.h"
 #include <time.h>
+#include <math.h>
 
 #define MAX_LOADSTRING 100
 
@@ -65,8 +66,13 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 		{
 			int refresh = g_Refresh;
 			g_Refresh = 0;
+
+			// Clamp to a maximum generations per second
+			int generationsPerSecond = 2;
+			clock_t start = clock();
 			evolve_win_tick(hWnd, refresh);
-			nextTick = clock() + 1;
+			clock_t end = clock();
+			nextTick = clock() + max(1, int(ceil((1000.0f / float(generationsPerSecond)) / float(g_EvolveState.popSize*2))) - (end - start));
 		}
 
 		while (PeekMessage(&msg, NULL, 0, 0, 1))

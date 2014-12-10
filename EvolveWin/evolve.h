@@ -1,8 +1,9 @@
 
-#define GENES_MAX			(32)
-#define POP_ROWS_MAX		(32)
-#define POP_COLS_MAX		(32)
-#define POP_MAX				(POP_ROWS_MAX*POP_COLS_MAX)
+#define GENES_MAX		(32)
+#define MAX_ALPHABET	(64)
+#define POP_ROWS_MAX	(32)
+#define POP_COLS_MAX	(32)
+#define POP_MAX			(POP_ROWS_MAX*POP_COLS_MAX)
 
 struct evolve_state_s;
 struct evolve_parms_s;
@@ -19,17 +20,17 @@ typedef struct creature_s
 
 typedef struct evolve_parms_s
 {
-	int		ageDeath;			// Generation from birth that creatures will die
-	int		ageMature;			// Generation from birth required to mate
-	int		rebirthGenerations; // Generations after catastrophe that no predation occurs
-	float	predationLevel;		// Level of Predation (0.0 to 1.0)
-	float	speciesMatch;		// Level of matching genes required to mate (0.0 to 1.0)
-	int		speciesNew;			// Minimum non matching creatures to define a new species
-	int		genes;				// Number of genomes in a gene
-	char	alphabet[64];		// Genome alphabet
-	int		popRows;			// Population Rows
-	int		popCols;			// Population Columns
-	int		envChangeRate;		// Environment changes every X generations
+	int		ageDeath;				// Generation from birth that creatures will die
+	int		ageMature;				// Generation from birth required to mate
+	int		rebirthGenerations;		// Generations after catastrophe that no predation occurs
+	float	predationLevel;			// Level of Predation (0.0 to 1.0)
+	float	speciesMatch;			// Level of matching genes required to mate (0.0 to 1.0)
+	int		speciesNew;				// Minimum non matching creatures to define a new species
+	int		genes;					// Number of genomes in a gene
+	char	alphabet[MAX_ALPHABET];	// Genome alphabet
+	int		popRows;				// Population Rows
+	int		popCols;				// Population Columns
+	int		envChangeRate;			// Environment changes every X generations
 
 } evolve_parms_t;
 
