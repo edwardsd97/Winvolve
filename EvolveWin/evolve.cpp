@@ -25,16 +25,14 @@ int creatureLastAliveIdx[2];
 int orderTable[MAX_POP];
 int population[2];
 
-int speciesState[2];
-
-
 char alphabet[] = { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 0 };
 int  alphabet_size;
 
 int rebirth = 0;
 float predation = DEFAULT_PREDATION;
 unsigned generation = 1;
-unsigned species = 0;
+unsigned speciesEver = 0;
+unsigned speciesNow = 0;
 unsigned extinctions = 0;
 unsigned massExtinctions = 0;
 int river_col = 0;
@@ -95,111 +93,6 @@ creature_t *creature_environment(creature_t *creature)
 	return &environment[creature_col(creature)];
 }
 
-void mutate(creature_t *creature)
-{
-	int gene = rand() % GENES_LEN;
-	if (rand() % 2)
-	{
-		// Change case but keep letter
-		if (creature->genes[gene] > 'Z')
-			creature->genes[gene] = creature->genes[gene] - ('a' - 'A');
-		else
-			creature->genes[gene] = creature->genes[gene] + ('a' - 'A');
-	}
-	else
-	{
-		// Change letter but keep case
-		int index = alphabet_index(creature->genes[gene]);
-		index += rand() % 2 ? 1 : -1;
-		if (creature->genes[gene] > 'Z')
-			index = clamp(index, 0, (alphabet_size / 2) - 1);
-		else
-			index = clamp(index, alphabet_size / 2, alphabet_size - 1);
-		creature->genes[gene] = alphabet[index];
-	}
-}
-
-void breed_creature(creature_t *child, creature_t *parentA, creature_t *parentB)
-{
-	int i;
-	if (parentA && !parentB)
-	{
-		// Clone of A
-		strcpy(child->genes, parentA->genes);
-	}
-	else if (!parentA && parentB)
-	{
-		// Clone of B
-		strcpy(child->genes, parentA->genes);
-	}
-	else if (parentA && parentB)
-	{
-		// Child of A and B
-		for (i = 0; i < GENES_LEN; i++)
-			child->genes[i] = rand() % 2 ? parentA->genes[i] : parentB->genes[i];
-	}
-	else
-	{
-		// Completely Random
-		for (i = 0; i < GENES_LEN; i++)
-			child->genes[i] = random_letter();
-		child->genes[GENES_SIZE - 1] = 0;
-	}
-
-	// 1 Genetic Mutation
-	mutate(child);
-
-	child->age = 0;
-}
-
-void random_environments(creature_t *envs, int count)
-{
-	char rndA = random_letter(alphabet_size);
-	char rndB = random_letter(alphabet_size);
-
-	int i;
-	int j;
-	const int envMod = 4;
-
-	// Bleed some creatures over to the other sides of the river
-	if (river_col > 0 && river_col < POP_COLS - 1)
-	{
-		for (i = 0; i < POP_ROWS; i++)
-		{
-			if (rand() % 2)
-			{
-				// Swap
-				creature_t temp;
-				memcpy(&temp, &creatures[i*POP_COLS + river_col], sizeof(creature_t));
-				memcpy(&creatures[i*POP_COLS + river_col], &creatures[i*POP_COLS + (river_col - 1)], sizeof(creature_t));
-				memcpy(&creatures[i*POP_COLS + (river_col-1)], &temp, sizeof(creature_t));
-			}
-		}
-	}
-
-	river_col = POP_COLS / 2;// (int)((float(POP_COLS) / 3.0f) + (randf() * (float(POP_COLS) / 3.0f)));
-
-	for (j = 0; j < count; j++)
-	{
-		if (j == river_col)
-		{
-			rndA = random_letter(alphabet_size);
-			rndB = random_letter(alphabet_size);
-		}
-		for (i = 0; i < GENES_SIZE - 1; i++)
-		{
-			if (i < GENES_LEN / 2)
-				envs[j].genes[i] = rndA;
-			else
-				envs[j].genes[i] = rndB;
-		}
-
-		envs[j].genes[GENES_SIZE - 1] = 0;
-	}
-
-	//strcpy(environment.genes, "aaaaaaaa");
-}
-
 int letter_delta(char A, char B)
 {
 	if (A < 'a')
@@ -214,9 +107,9 @@ int letter_delta(char A, char B)
 	int smaller = min(A, B);
 
 	int result1 = bigger - smaller;
-	int result2 = 1 + (smaller - alphabet[0]) + (alphabet[(alphabet_size / 2)-1]) - bigger;
+	int result2 = 1 + (smaller - alphabet[0]) + (alphabet[(alphabet_size / 2) - 1]) - bigger;
 
-	return min( result1, result2 ) * 2;
+	return min(result1, result2) * 2;
 }
 
 float matches_letter(char A, char B)
@@ -273,24 +166,55 @@ float score_predatory(creature_t *triggerer, creature_t *prey)
 	return score;
 }
 
-float score_mate(creature_t *seeker, creature_t *victim)
+float score_mate_possible(creature_t *creatureA, creature_t *creatureB)
 {
-	if (!seeker->genes[0])
+	if (creatureA->species != creatureB->species)
+		return -1;
+
+	if (!creatureA->genes[0])
 		return -1; // i am dead
 
-	if (!victim->genes[0])
-		return -1; // victim dead
+	if (!creatureB->genes[0])
+		return -1; // creatureB dead
 
-	if (victim->age < AGE_MATURE)
-		return -1; // victim not old enough
-
-	if (seeker->age < AGE_MATURE)
-		return -1; // i am not old enough
-
-	if (seeker == victim)
+	if (creatureA == creatureB)
 		return -1; // cant mate with myself
 
-	if (score_connected(seeker, victim) <= 0.0f)
+	float score = 0;
+
+	for (int i = 0; i < GENES_LEN; i++)
+	{
+		// Those that match my colors the most
+		score += matches_letter(creatureA->genes[i], creatureB->genes[i]) * (1.0f / (float)(GENES_LEN));
+	}
+
+	if (score >= SPECIES_MATCH_SCORE)
+		return score;
+
+	return -1;
+}
+
+float score_mate(creature_t *creatureA, creature_t *creatureB)
+{
+	if (!creatureA->genes[0])
+		return -1; // i am dead
+
+	if (!creatureB->genes[0])
+		return -1; // creatureB dead
+
+	if (creatureB->age < AGE_MATURE)
+		return -1; // creatureB not old enough
+
+	if (creatureA->age < AGE_MATURE)
+		return -1; // i am not old enough
+
+	if (creatureA == creatureB)
+		return -1; // cant mate with myself
+
+	if (score_connected(creatureA, creatureB) <= 0.0f)
+		return -1;
+
+	if (score_mate_possible(creatureA, creatureB) <= 0.0f)
 		return -1;
 
 	float score = 0;
@@ -298,10 +222,10 @@ float score_mate(creature_t *seeker, creature_t *victim)
 	for (int i = 0; i < GENES_LEN; i++)
 	{
 		// Prefer those that match my colors the most
-		score += matches_letter(seeker->genes[i], victim->genes[i]) * (1.0f / (float)(GENES_LEN*2));
+		score += matches_letter(creatureA->genes[i], creatureB->genes[i]) * (1.0f / (float)(GENES_LEN * 2));
 
 		// Prefer those that stand out against the environment
-		score += (1.0f - matches_letter(victim->genes[i], creature_environment(victim)->genes[i])) * (1.0f / (float)(GENES_LEN * 2));
+		score += (1.0f - matches_letter(creatureB->genes[i], creature_environment(creatureB)->genes[i])) * (1.0f / (float)(GENES_LEN * 2));
 	}
 
 	return score;
@@ -315,7 +239,7 @@ float score_near(creature_t *creatureA, creature_t *creatureB)
 	int rowDelta = abs(creature_row(creatureB) - creature_row(creatureA));
 	int colDelta = abs(creature_row(creatureB) - creature_row(creatureA));
 	float diff = (float)max(rowDelta, colDelta);
-	float range = max( POP_ROWS, POP_COLS );
+	float range = max(POP_ROWS, POP_COLS);
 	return clamp(1.0f - (diff / range), 0.0f, 1.0f);
 }
 
@@ -330,6 +254,161 @@ float score_free(creature_t *creatureA, creature_t *creatureB)
 	// free slot
 	return score_near(creatureA, creatureB);
 }
+
+void mutate(creature_t *creature)
+{
+	int gene = rand() % GENES_LEN;
+	if (rand() % 2)
+	{
+		// Change case but keep letter
+		if (creature->genes[gene] > 'Z')
+			creature->genes[gene] = creature->genes[gene] - ('a' - 'A');
+		else
+			creature->genes[gene] = creature->genes[gene] + ('a' - 'A');
+	}
+	else
+	{
+		// Change letter but keep case
+		int index = alphabet_index(creature->genes[gene]);
+		index += rand() % 2 ? 1 : -1;
+		if (creature->genes[gene] > 'Z')
+			index = clamp(index, 0, (alphabet_size / 2) - 1);
+		else
+			index = clamp(index, alphabet_size / 2, alphabet_size - 1);
+		creature->genes[gene] = alphabet[index];
+	}
+}
+
+void breed_creature(creature_t *child, creature_t *parentA, creature_t *parentB)
+{
+	int i;
+
+	memset(child, 0, sizeof(creature_t));
+
+	if (parentA && !parentB)
+	{
+		// Clone of A
+		strcpy(child->genes, parentA->genes);
+		child->species = parentA->species;
+	}
+	else if (!parentA && parentB)
+	{
+		// Clone of B
+		strcpy(child->genes, parentA->genes);
+		child->species = parentB->species;
+	}
+	else if (parentA && parentB)
+	{
+		// Child of A and B
+		for (i = 0; i < GENES_LEN; i++)
+			child->genes[i] = rand() % 2 ? parentA->genes[i] : parentB->genes[i];
+		child->species = parentA->species;
+	}
+	else
+	{
+		// Completely Random
+		for (i = 0; i < GENES_LEN; i++)
+			child->genes[i] = random_letter();
+		child->genes[GENES_SIZE - 1] = 0;
+		speciesEver++;
+		child->species = speciesEver;
+	}
+
+	// 1 Genetic Mutation
+	mutate(child);
+
+	// See if this is a new species
+	int possible = 0;
+	int matched = 0;
+	creature_t *newSpecies[MAX_POP];
+	creature_t *oldSpecies[MAX_POP];
+	int newSpeciesCnt = 0;
+	int oldSpeciesCnt = 0;
+	bool wasPossible;
+	for (i = 0; i < MAX_POP; i++)
+	{
+		if (child == &creatures[i])
+			continue;
+
+		wasPossible = false;
+		if (score_mate_possible(child, &creatures[i]) > 0.0f)
+		{
+			wasPossible = true;
+			possible++;
+		}
+
+		if (creatures[i].genes[0] && child->species == creatures[i].species)
+		{
+			matched++;
+			if (wasPossible)
+			{
+				newSpecies[newSpeciesCnt] = &creatures[i];
+				newSpeciesCnt++;
+			}
+			else
+			{
+				oldSpecies[oldSpeciesCnt] = &creatures[i];
+				oldSpeciesCnt++;
+			}
+		}
+	}
+
+	if (newSpeciesCnt >= NEW_SPECIES_MINIMUM && newSpeciesCnt <= oldSpeciesCnt)
+	{
+		speciesEver++;
+		for (i = 0; i < newSpeciesCnt; i++)
+			newSpecies[i]->species = speciesEver;
+	}
+}
+
+void random_environments(creature_t *envs, int count)
+{
+	char rndA = random_letter(alphabet_size);
+	char rndB = random_letter(alphabet_size);
+
+	int i;
+	int j;
+	const int envMod = 4;
+
+	// Bleed some creatures over to the other sides of the river
+	if (river_col > 0 && river_col < POP_COLS - 1)
+	{
+		for (i = 0; i < POP_ROWS; i++)
+		{
+			if (rand() % 2)
+			{
+				// Swap
+				creature_t temp;
+				memcpy(&temp, &creatures[i*POP_COLS + river_col], sizeof(creature_t));
+				memcpy(&creatures[i*POP_COLS + river_col], &creatures[i*POP_COLS + (river_col - 1)], sizeof(creature_t));
+				memcpy(&creatures[i*POP_COLS + (river_col-1)], &temp, sizeof(creature_t));
+			}
+		}
+	}
+
+	river_col = POP_COLS / 2;// (int)((float(POP_COLS) / 3.0f) + (randf() * (float(POP_COLS) / 3.0f)));
+
+	for (j = 0; j < count; j++)
+	{
+		if (j == river_col)
+		{
+			rndA = random_letter(alphabet_size);
+			rndB = random_letter(alphabet_size);
+		}
+		for (i = 0; i < GENES_SIZE - 1; i++)
+		{
+			if (i < GENES_LEN / 2)
+				envs[j].genes[i] = rndA;
+			else
+				envs[j].genes[i] = rndB;
+		}
+
+		envs[j].genes[GENES_SIZE - 1] = 0;
+	}
+
+	//strcpy(environment.genes, "aaaaaaaa");
+}
+
 
 int find_best(creature_t *creature, score_func func)
 {
@@ -352,6 +431,7 @@ int find_best(creature_t *creature, score_func func)
 
 void die( creature_t *creature )
 {
+	int i;
 	if (creature->genes[0])
 	{
 		if (creature_col(creature) >= river_col)
@@ -364,6 +444,16 @@ void die( creature_t *creature )
 			strcpy(creatureLastAlive[0].genes, creature->genes);
 			creatureLastAliveIdx[0] = creature_index(creature);
 		}
+
+		// See if this is the last of a species
+		for ( i = 0; i < MAX_POP; i++)
+		{
+			if (score_mate_possible(creature, &creatures[i]) > 0.0f )
+				break;
+		}
+		if ( i == MAX_POP )
+			extinctions++;
+
 		memset(creature, 0, sizeof(creature_t));
 	}
 }
@@ -417,25 +507,46 @@ void procreate( int iCreature )
 
 void current_population( )
 {
+	unsigned i;
+	unsigned j;
+	int speciesList[MAX_POP];
+	speciesNow = 0;
 	population[0] = 0;
 	population[1] = 0;
-	for (int i = 0; i < MAX_POP; i++)
+	for ( i = 0; i < MAX_POP; i++)
 	{
+		if (creatures[i].genes[0] == 0)
+			continue;
+
 		if (creature_col(&creatures[i]) < river_col)
-			population[0] += (creatures[i].genes[0] != 0);
+			population[0]++;
 		else
-			population[1] += (creatures[i].genes[0] != 0);
+			population[1]++;
+
+		for (j = 0; j < speciesNow; j++)
+		{
+			if (creatures[i].species == speciesList[j])
+				break;
+		}
+		if (j == speciesNow)
+		{
+			speciesList[speciesNow] = creatures[i].species;
+			speciesNow++;
+		}
 	}
 }
 
-void evolve_rebirth()
+void evolve_rebirth( bool randomizeEnvironment )
 {
 	int rebirth_age = max(0, AGE_MATURE - 1);
+
+	current_population();
 
 	for (int i = 0; i < MAX_POP; i++)
 		creatures[i].age = rebirth_age;
 
-	random_environments(environment, POP_COLS);
+	if ( randomizeEnvironment )
+		random_environments(environment, POP_COLS);
 
 	for (int col = river_col; col >= 0 && col > river_col - 2; col--)
 	{
@@ -486,6 +597,8 @@ void evolve_init()
 
 	srand((unsigned)time(NULL));
 
+	memset(creatures, 0, sizeof(creatures));
+
 	random_environments(environment, POP_COLS);
 
 	// Generate a single random creature in each environment and trigger a time of rebirth
@@ -513,13 +626,7 @@ void evolve_init()
 		}
 	}
 
-	// Start with distinct species
-	species++;
-	speciesState[0] = 1;
-	species++;
-	speciesState[1] = 1;
-
-	evolve_rebirth();
+	evolve_rebirth( false );
 	randomize_order();
 }
 
@@ -527,26 +634,16 @@ int evolve_simulate(int step)
 {
 	current_population();
 
-	for (int i = 0; i < 2; i++)
-	{
-		if (!speciesState[i] && population[i] >= (MAX_POP / 2) / 2)
-		{
-			species++;
-			speciesState[i] = 1;
-		}
-		else if ( speciesState[i] && population[i] <= 0 )
-		{
-			extinctions++;
-			speciesState[i] = 0;
-		}
-	}
-
-	if ((rebirth <= 0 && population[0] < 2 && population[1] < 2 )|| (population[0] == 0 && population[1] == 0))
+	if ( population[0] == 0 && population[1] == 0 )
 	{
 		massExtinctions++;
+		speciesEver++;
+		creatureLastAlive[0].species = speciesEver;
+		speciesEver++;
+		creatureLastAlive[1].species = speciesEver;
 
 		// Initiate a rebirth
-		evolve_rebirth();
+		evolve_rebirth( true );
 		step = 0;
 	}
 

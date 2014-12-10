@@ -177,7 +177,7 @@ void draw(HWND hwnd, int step, int refresh)
 		sprintf(msg, "%i", generation);
 		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
 		rect.left += 140;
-		sprintf(msg, "%i", species);
+		sprintf(msg, "%i/%i", speciesNow, speciesEver);
 		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
 		rect.left += 155;
 		sprintf(msg, "%i", extinctions);

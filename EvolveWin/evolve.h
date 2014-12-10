@@ -9,9 +9,12 @@
 #define AGE_MATURE			(2)
 #define REBIRTH_GENERATIONS (10)
 #define DEFAULT_PREDATION	(0.9f)
+#define SPECIES_MATCH_SCORE (0.5f)
+#define NEW_SPECIES_MINIMUM (6)
 
 typedef struct creature_s
 {
+	int		species;
 	int		age;
 	char	genes[GENES_SIZE];
 
@@ -23,7 +26,8 @@ extern creature_t environment[POP_COLS];
 extern float predation;
 extern int rebirth;
 extern unsigned generation;
-extern unsigned species;
+extern unsigned speciesNow;
+extern unsigned speciesEver;
 extern unsigned extinctions;
 extern unsigned massExtinctions;
 extern int river_col;
