@@ -432,7 +432,7 @@ void breed_creature(evolve_state_t *state,creature_t *child, creature_t *parentA
 		state->speciesEver++;
 		for (i = 0; i < newSpeciesCnt; i++)
 			newSpecies[i]->species = state->speciesEver;
-		record_species(newSpecies[0], state->generation,1);
+		record_species(newSpecies[rand()%newSpeciesCnt], state->generation,1);
 	}
 }
 
@@ -527,7 +527,9 @@ void die( creature_t *creature )
 		// See if this is the last of a species
 		for ( i = 0; i < state->popSize; i++)
 		{
-			if (score_mate_possible(creature, &state->creatures[i]) > 0.0f )
+			// If there are still creatures alive of the same species (even if we cannot physically mate with them at this time)
+			//  then this is not considered an extinction
+			if ( creature->species == state->creatures[i].species && state->creatures[i].genes[0] )
 				break;
 		}
 		if (i == state->popSize)
@@ -769,8 +771,8 @@ void evolve_simulate(evolve_state_t *state)
 
 		for (int i = 0; i < state->popSize; i++)
 		{
-			if (state->creatures[i].genes[0])
-				record_species(&state->creatures[i], state->generation, 1);
+			if (state->creatures[state->orderTable[i]].genes[0])
+				record_species(&state->creatures[state->orderTable[i]], state->generation, 1);
 		}
 
 		state->step = 0;
@@ -783,8 +785,8 @@ void evolve_simulate(evolve_state_t *state)
 		{
 			for (int i = 0; i < state->popSize; i++)
 			{
-				if (state->creatures[i].genes[0])
-					record_species(&state->creatures[i], state->generation,1);
+				if (state->creatures[state->orderTable[i]].genes[0])
+					record_species(&state->creaturesstate->orderTable[i]], state->generation,1);
 			}
 
 			random_environments(state, state->environment, state->parms.popCols);
