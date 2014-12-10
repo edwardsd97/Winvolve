@@ -16,6 +16,7 @@ TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
 int g_Quit = 0;
 int g_Refresh = 1;
 int g_Stats = 1;
+evolve_state_t g_EvolveState;
 
 extern HFONT hFont;
 extern HBRUSH hBackBrush;
@@ -172,18 +173,18 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DestroyWindow(hWnd);
 			break;
 		case IDM_PREDATION:
-			if (predation > 0.0f)
-				predation = 0.0f;
+			if (g_EvolveState.predation > 0.0f)
+				g_EvolveState.predation = 0.0f;
 			else
-				predation = DEFAULT_PREDATION;
+				g_EvolveState.predation = g_EvolveState.parms.predationLevel;
 			g_Refresh = 1;
 			break;
 		case IDM_ASTEROID:
-			evolve_asteroid();
+			evolve_asteroid(&g_EvolveState);
 			g_Refresh = 1;
 			break;
 		case IDM_EARTHQUAKE:
-			evolve_earthquake();
+			evolve_earthquake(&g_EvolveState);
 			g_Refresh = 1;
 			break;
 		case IDM_STATS:

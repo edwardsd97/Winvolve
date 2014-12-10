@@ -9,7 +9,7 @@
 #pragma warning(disable:4996) // This function or variable may be unsafe.
 
 bool initialized = false;
-int evolve_step = 0;
+
 HFONT hFont = 0;
 HBRUSH hBackBrush = 0;
 HPEN hRiverPen = 0;
@@ -18,6 +18,7 @@ COLORREF bkColor = RGB(32, 32, 32);
 
 extern int g_Refresh;
 extern int g_Stats;
+extern evolve_state_t g_EvolveState;
 
 void draw_text(HDC dc, LPRECT rect, const char *text, COLORREF color )
 {
@@ -45,17 +46,17 @@ void draw_creature(HDC dc, LPRECT rect, const creature_t *creature)
 
 	SetBkColor(dc, bkColor);
 
-	for (int i = 0; i < GENES_LEN; i++)
+	for (int i = 0; i < g_EvolveState.parms.genes; i++)
 	{
 		letter[0] = creature->genes[i];
 		if (creature->genes[i] == 0)
 			letter[0] = ' ';
-		::MultiByteToWideChar(CP_ACP, 0, letter, -1, unicodestr, GENES_SIZE);
+		::MultiByteToWideChar(CP_ACP, 0, letter, -1, unicodestr, GENES_MAX);
 		int colorIdx = letter[0] - 'a';
 		if (letter[0] <= 'Z')
 			colorIdx = letter[0] - 'A';
 		COLORREF clr = color[colorIdx];
-		float fade = 0.2f + ((1.0f - (float(creature->age) / float(AGE_DEATH))) * 0.8f);
+		float fade = 0.2f + ((1.0f - (float(creature->age) / float(g_EvolveState.parms.ageDeath))) * 0.8f);
 		clr = RGB(fade * (clr & 0xFF), fade * ((clr & 0xFF00) >> 8), fade * ((clr & 0xFF0000) >> 16));
 		SetTextColor(dc, clr);
 		DrawText(dc, unicodestr, -1, rect, 0);
@@ -108,10 +109,10 @@ void draw(HWND hwnd, int step, int refresh)
 
 	static int last_col;
 
-	if (last_col != river_col)
+	if (last_col != g_EvolveState.river_col)
 	{
 		refresh = 1;
-		last_col = river_col;
+		last_col = g_EvolveState.river_col;
 	}
 
 	if (step == 0 || refresh)
@@ -123,7 +124,7 @@ void draw(HWND hwnd, int step, int refresh)
 			if (g_Stats)
 			{
 				rect.left = 6;
-				rect.top = 20 * POP_ROWS + 20 + 20;
+				rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20;
 				draw_text(hdc, &rect, "Generations:", RGB(200, 200, 200));
 				rect.left += 175;
 				draw_text(hdc, &rect, "Species:", RGB(200, 200, 200));
@@ -137,57 +138,57 @@ void draw(HWND hwnd, int step, int refresh)
 
 			lastStats = 0;
 
-			if (river_col)
+			if (g_EvolveState.river_col)
 			{
-				int x = (10 + (river_col * GENES_SIZE * 10)) - 5;
+				int x = (10 + (g_EvolveState.river_col * (g_EvolveState.parms.genes + 1) * 10)) - 5;
 				MoveToEx(hdc, x, 35, (LPPOINT)NULL);
-				LineTo(hdc, x, 35 + (POP_ROWS * 20));
+				LineTo(hdc, x, 35 + (g_EvolveState.parms.popRows * 20));
 			}
 		}
 
-		for (i = 0; i < POP_COLS; i++)
+		for (i = 0; i < g_EvolveState.parms.popCols; i++)
 		{
-			rect.left = 10 + (i * GENES_SIZE * 10);
+			rect.left = 10 + (i * (g_EvolveState.parms.genes + 1) * 10);
 			rect.top = 10;
-			draw_creature(hdc, &rect, &environment[i]);
+			draw_creature(hdc, &rect, &g_EvolveState.environment[i]);
 		}
 
-		for (i = 0; i < POP_ROWS; i++)
+		for (i = 0; i < g_EvolveState.parms.popRows; i++)
 		{
-			for (j = 0; j < POP_COLS; j++)
+			for (j = 0; j < g_EvolveState.parms.popCols; j++)
 			{
-				rect.left = 10 + (j * GENES_SIZE * 10);
+				rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
 				rect.top = 35 + (i * 20);
-				draw_creature(hdc, &rect, &creatures[(i*POP_COLS) + j]);
+				draw_creature(hdc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
 			}
 		}
 	}
 
-	i = (step % MAX_POP) / POP_COLS;
-	j = (step % MAX_POP) % POP_COLS;
-	rect.left = 10 + (j * GENES_SIZE * 10);
+	i = (step % g_EvolveState.popSize) / g_EvolveState.parms.popCols;
+	j = (step % g_EvolveState.popSize) % g_EvolveState.parms.popCols;
+	rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
 	rect.top = 35 + (i *20);
-	draw_creature(hdc, &rect, &creatures[(i*POP_COLS) + j]);
+	draw_creature(hdc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
 
 	if ( g_Stats && clock() - lastStats > 250)
 	{
 		rect.left = 6;
-		rect.top = 20 * POP_ROWS + 20 + 20;
+		rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20;
 		rect.left += 110;
-		sprintf(msg, "%i", generation);
+		sprintf(msg, "%i", g_EvolveState.generation);
 		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
 		rect.left += 140;
-		sprintf(msg, "%i/%i", speciesNow, speciesEver);
+		sprintf(msg, "%i/%i", g_EvolveState.speciesNow, g_EvolveState.speciesEver);
 		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
 		rect.left += 155;
-		sprintf(msg, "%i", extinctions);
+		sprintf(msg, "%i", g_EvolveState.extinctions);
 		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
 		rect.left += 170;
-		sprintf(msg, "%i", massExtinctions);
+		sprintf(msg, "%i", g_EvolveState.massExtinctions);
 		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
 		rect.left += 121;
 		static int lastPredation;
-		if (predation > 0.0f && rebirth <= 0)
+		if (g_EvolveState.predation > 0.0f && g_EvolveState.rebirth <= 0)
 		{
 			draw_text(hdc, &rect, "ON", RGB(255, 200, 200));
 			if (!lastPredation)
@@ -199,7 +200,7 @@ void draw(HWND hwnd, int step, int refresh)
 			if (lastPredation)
 				g_Refresh = 1;
 		}
-		lastPredation = predation > 0.0f && rebirth <= 0;
+		lastPredation = g_EvolveState.predation > 0.0f && g_EvolveState.rebirth <= 0;
 		lastStats = clock();
 	}
 
@@ -216,13 +217,13 @@ void evolve_win_tick(HWND hwnd, int refresh)
 {
 	if (!initialized)
 	{
-		evolve_init();
+		evolve_init(&g_EvolveState);
 		initialized = true;
 	}
 
-	int drawStep = evolve_step;
+	int drawStep = g_EvolveState.step;
 
-	evolve_step = evolve_simulate(evolve_step);
+	evolve_simulate(&g_EvolveState);
 
 	draw(hwnd, drawStep, refresh);
 }

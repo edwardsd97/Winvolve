@@ -1,38 +1,67 @@
 
-#define GENES_SIZE	(9)
-#define GENES_LEN	(GENES_SIZE-1)
-#define POP_ROWS	(22)
-#define POP_COLS	(8)
-#define MAX_POP		(POP_ROWS * POP_COLS)
+#define GENES_MAX			(32)
+#define POP_ROWS_MAX		(32)
+#define POP_COLS_MAX		(32)
+#define POP_MAX				(POP_ROWS_MAX*POP_COLS_MAX)
 
-#define AGE_DEATH			(5)
-#define AGE_MATURE			(2)
-#define REBIRTH_GENERATIONS (10)
-#define DEFAULT_PREDATION	(0.9f)
-#define SPECIES_MATCH_SCORE (0.5f)
-#define NEW_SPECIES_MINIMUM (6)
+struct evolve_state_s;
+struct evolve_parms_s;
+struct creature_s;
 
 typedef struct creature_s
 {
-	int		species;
-	int		age;
-	char	genes[GENES_SIZE];
+	evolve_state_s *state;
+	int				species;
+	int				age;
+	char			genes[GENES_MAX];
 
 } creature_t;
 
-extern creature_t creatures[MAX_POP];
-extern creature_t environment[POP_COLS];
+typedef struct evolve_parms_s
+{
+	int		ageDeath;			// Generation from birth that creatures will die
+	int		ageMature;			// Generation from birth required to mate
+	int		rebirthGenerations; // Generations after catastrophe that no predation occurs
+	float	predationLevel;		// Level of Predation (0.0 to 1.0)
+	float	speciesMatch;		// Level of matching genes required to mate (0.0 to 1.0)
+	int		speciesNew;			// Minimum non matching creatures to define a new species
+	int		genes;				// Number of genomes in a gene
+	char	alphabet[64];		// Genome alphabet
+	int		popRows;			// Population Rows
+	int		popCols;			// Population Columns
+	int		envChangeRate;		// Environment changes every X generations
 
-extern float predation;
-extern int rebirth;
-extern unsigned generation;
-extern unsigned speciesNow;
-extern unsigned speciesEver;
-extern unsigned extinctions;
-extern unsigned massExtinctions;
-extern int river_col;
+} evolve_parms_t;
 
-void	evolve_init();
-int		evolve_simulate(int step);
-void	evolve_asteroid();
-void	evolve_earthquake();
+typedef struct evolve_state_s
+{
+	evolve_parms_t	parms;
+	int				popSize;	// state->popSize(state->parms.popRows * state->parms.popCols)
+
+	creature_t		creatures[POP_MAX];
+	creature_t		environment[POP_COLS_MAX];
+
+	unsigned		generation;
+	unsigned		speciesNow;
+	unsigned		speciesEver;
+	unsigned		extinctions;
+	unsigned		massExtinctions;
+	float			predation;
+	int				river_col;
+	int				rebirth;
+	int				step;
+	int				alphabet_size;
+	int				orderTable[POP_MAX];
+
+	creature_t		creatureLastAlive[2];
+	int				creatureLastAliveIdx[2];
+	int				population[2];
+
+} evolve_state_t;
+
+bool	evolve_init(evolve_state_t *state, evolve_parms_t *parms = NULL);
+void	evolve_simulate(evolve_state_t *state);
+
+void	evolve_parms_default(evolve_parms_t *parms);
+void	evolve_asteroid(evolve_state_t *state);
+void	evolve_earthquake(evolve_state_t *state);
