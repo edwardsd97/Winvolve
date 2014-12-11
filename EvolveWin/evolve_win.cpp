@@ -106,10 +106,10 @@ void click_asteroid()
 
 button_t g_Buttons[4] =
 {
-	{ "Defaults",	click_defaults },
-	{ "Predation",	click_predation },
-	{ "Earthquake",	click_earthquake },
-	{ "Asteroid",	click_asteroid },
+	{ "Defaults (*)",	click_defaults },
+	{ "Predation",		click_predation },
+	{ "Earthquake",		click_earthquake },
+	{ "Asteroid",		click_asteroid },
 };
 
 button_t *g_buttonClicking = NULL;
