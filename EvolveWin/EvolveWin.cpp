@@ -21,7 +21,9 @@ evolve_state_t g_EvolveState;
 
 extern HFONT hFont;
 extern HBRUSH hBackBrush;
+extern HBRUSH hBrightBrush;
 extern HPEN hRiverPen;
+extern HPEN hBrightPen;
 
 
 // Forward declarations of functions included in this code module:
@@ -30,7 +32,11 @@ BOOL				InitInstance(HINSTANCE, int);
 LRESULT CALLBACK	WndProc(HWND, UINT, WPARAM, LPARAM);
 INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 
-void				evolve_win_tick(HWND hwnd, int refresh);
+void				evolve_win_tick();
+void				evolve_win_draw(HWND hwnd);
+void				evolve_win_mouse_move(HWND hwnd, int x, int y);
+void				evolve_win_mouse_down(HWND hwnd, int x, int y);
+void				evolve_win_mouse_up(HWND hwnd, int x, int y);
 
 int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -64,18 +70,19 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	{
 		if (clock() >= nextTick)
 		{
-			int refresh = g_Refresh;
-			g_Refresh = 0;
-
 			// Clamp to a maximum generations per second
 			int generationsPerSecond = 3;
 			clock_t start = clock();
-			evolve_win_tick(hWnd, refresh);
+			
+			evolve_win_tick();
+
+			evolve_win_draw(hWnd);
+
 			clock_t end = clock();
 			nextTick = clock() + max(1, int(ceil((1000.0f / float(generationsPerSecond)) / float(g_EvolveState.popSize*2))) - (end - start));
 		}
 
-		while (PeekMessage(&msg, NULL, 0, 0, 1))
+		if (PeekMessage(&msg, NULL, 0, 0, 1))
 		{
 			if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
 			{
@@ -131,7 +138,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    int dwStyle = (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX);
 
    hWnd = CreateWindow(szWindowClass, szTitle, dwStyle,
-      CW_USEDEFAULT, 0, 750, 930, NULL, NULL, hInstance, NULL);
+      CW_USEDEFAULT, 0, 980, 930, NULL, NULL, hInstance, NULL);
 
    if (!hWnd)
    {
@@ -176,6 +183,8 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DeleteObject((HGDIOBJ)hFont);
 			DeleteObject((HGDIOBJ)hBackBrush);
 			DeleteObject((HGDIOBJ)hRiverPen);
+			DeleteObject((HGDIOBJ)hBrightBrush);
+			DeleteObject((HGDIOBJ)hBrightPen);
 			DestroyWindow(hWnd);
 			break;
 		case IDM_PREDATION:
@@ -206,6 +215,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		// TODO: Add any drawing code here...
 		g_Refresh = 1;
 		EndPaint(hWnd, &ps);
+		break;
+	case WM_MOUSEMOVE:
+		evolve_win_mouse_move(hWnd, LOWORD(lParam), HIWORD(lParam));
+		break;
+	case WM_LBUTTONDOWN:
+		evolve_win_mouse_down(hWnd, LOWORD(lParam), HIWORD(lParam));
+		break;
+	case WM_LBUTTONUP:
+		evolve_win_mouse_up(hWnd, LOWORD(lParam), HIWORD(lParam));
 		break;
 	case WM_DESTROY:
 		g_Quit = 1;

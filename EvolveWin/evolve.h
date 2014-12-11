@@ -20,6 +20,19 @@ typedef struct creature_s
 
 } creature_t;
 
+typedef enum
+{
+	ES_GENERATIONS,
+	ES_SPECIES_NOW,
+	ES_SPECIES_EVER,
+	ES_SPECIES_MAX_AGE,
+	ES_EXTINCTIONS,
+	ES_EXTINCTIONS_MASS,
+
+	ES_COUNT,
+
+} stat_t;
+
 typedef struct evolve_parms_s
 {
 	int		ageDeath;				// Generation from birth that creatures will die
@@ -53,11 +66,6 @@ typedef struct evolve_state_s
 	creature_t		creatures[POP_MAX];
 	creature_t		environment[POP_COLS_MAX];
 
-	unsigned		generation;
-	unsigned		speciesNow;
-	unsigned		speciesEver;
-	unsigned		extinctions;
-	unsigned		massExtinctions;
 	float			predation;
 	int				river_col;
 	int				rebirth;
@@ -71,9 +79,12 @@ typedef struct evolve_state_s
 	int				creatureLastAliveIdx[2];
 	int				population[2];
 
+	int				stats[ES_COUNT];
+
 } evolve_state_t;
 
 bool	evolve_init(evolve_state_t *state, evolve_parms_t *parms = NULL);
+void	evolve_parms_update(evolve_state_t *state, evolve_parms_t *parms);
 void	evolve_simulate(evolve_state_t *state);
 
 void	evolve_parms_default(evolve_parms_t *parms);

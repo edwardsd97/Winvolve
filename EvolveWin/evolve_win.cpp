@@ -12,13 +12,109 @@ bool initialized = false;
 
 HFONT hFont = 0;
 HBRUSH hBackBrush = 0;
+HBRUSH hBrightBrush = 0;
 HPEN hRiverPen = 0;
+HPEN hBrightPen = 0;
 BSTR unicodestr = SysAllocStringLen(NULL, 1024);
 COLORREF bkColor = RGB(32, 32, 32);
 
 extern int g_Refresh;
 extern int g_Stats;
 extern evolve_state_t g_EvolveState;
+
+const int RIGHT_PANEL_SIZE = 230;
+
+typedef struct parm_slider_s
+{
+	void	*data;
+	int		min;
+	int		max;
+	int		type;
+	int		fullRefresh;
+
+	char	*title;
+
+	RECT	frameRect;
+	RECT	scrRect;
+
+} parm_slider_t;
+
+typedef void(*button_func)();
+
+typedef struct button_s
+{
+	char		*title;
+	button_func	func;
+	RECT		frameRect;
+	RECT		scrRect;
+
+} button_t;
+
+
+const char *g_statNames[] =
+{
+	"Generations:",			// ES_GENERATIONS
+	"Species Now:",			// ES_SPECIES_NOW,
+	"Species Ever:",		// ES_SPECIES_EVER
+	"Species Max Age:",		// ES_SPECIES_MAX_AGE,
+	"Extinctions:",			// ES_EXTINCTIONS,
+	"Mass Extinctions:",	// ES_EXTINCTIONS_MASS,
+};
+
+evolve_parms_t g_EvolveParms;
+
+parm_slider_t g_parmSliders[10] =
+{
+	{ &g_EvolveParms.ageDeath, 1, 20, 0, 0, "Age of Death" },
+	{ &g_EvolveParms.ageMature, 0, 19, 0, 0, "Age of Maturity" },
+	{ &g_EvolveParms.rebirthGenerations, 0, 100, 0, 0, "Rebirth Generations" },
+	{ &g_EvolveParms.predationLevel, 0, 1, 1, 0, "Predation Level" },
+	{ &g_EvolveParms.speciesMatch, 0, 1, 1, 0, "Species Mate" },
+	{ &g_EvolveParms.speciesNew, 1, 50, 0, 0, "Min Species Pop" },
+	{ &g_EvolveParms.envChangeRate, 1, 1000, 0, 0, "Enviro Change Rate" },
+	{ &g_EvolveParms.genes, 1, 32, 0, 1, "Gene Count (*)" },
+	{ &g_EvolveParms.popRows, 1, 32, 0, 1, "Population Rows (*)" },
+	{ &g_EvolveParms.popCols, 1, 32, 0, 1, "Population Cols (*)" },
+
+//	char	alphabet[MAX_ALPHABET];	// Genome alphabet
+
+};
+
+void click_defaults()
+{
+	evolve_parms_default(&g_EvolveParms);
+	evolve_init(&g_EvolveState, &g_EvolveParms);
+}
+
+void click_predation()
+{
+	if (g_EvolveState.predation > 0.0f)
+		g_EvolveState.predation = 0.0f;
+	else
+		g_EvolveState.predation = g_EvolveState.parms.predationLevel;
+}
+
+void click_earthquake()
+{
+	evolve_earthquake(&g_EvolveState);
+}
+
+void click_asteroid()
+{
+	evolve_asteroid(&g_EvolveState);
+}
+
+button_t g_Buttons[4] =
+{
+	{ "Defaults",	click_defaults },
+	{ "Predation",	click_predation },
+	{ "Earthquake",	click_earthquake },
+	{ "Asteroid",	click_asteroid },
+};
+
+button_t *g_buttonClicking = NULL;
+parm_slider_t *g_sliderEditing = NULL;
+void *g_Hovering = NULL;
 
 void draw_text(HDC dc, LPRECT rect, const char *text, COLORREF color )
 {
@@ -27,6 +123,154 @@ void draw_text(HDC dc, LPRECT rect, const char *text, COLORREF color )
 	SetBkColor(dc, bkColor);
 	SetTextColor(dc, color);
 	DrawText(dc, unicodestr, -1, rect, 0);
+}
+
+void draw_button(HDC dc, LPRECT rect, button_t *button)
+{
+	RECT temp;
+
+	memcpy(&temp, rect, sizeof(RECT));
+	memcpy(&button->frameRect, rect, sizeof(RECT));
+
+	HFONT fFontOld = (HFONT)SelectObject(dc, (HGDIOBJ)hFont);
+	HBRUSH hBrushold = (HBRUSH)SelectObject(dc, (HGDIOBJ)hBackBrush);
+	HPEN hPenold;
+	
+	if ( g_Hovering == button )
+		hPenold = (HPEN)SelectObject(dc, (HGDIOBJ)hBrightPen);
+	else
+		hPenold = (HPEN)SelectObject(dc, (HGDIOBJ)hRiverPen);
+
+	if ( g_buttonClicking == button )
+		FillRect(dc, rect, hBrightBrush);
+	else
+		FillRect(dc, rect, hBackBrush);
+	MoveToEx(dc, rect->left, rect->top, NULL);
+	LineTo(dc, rect->right, rect->top);
+	LineTo(dc, rect->right, rect->bottom);
+	LineTo(dc, rect->left, rect->bottom);
+	LineTo(dc, rect->left, rect->top);
+
+	temp.top = temp.top + (((temp.bottom - temp.top) / 2) - 10);
+	temp.left = temp.left + ((temp.right - temp.left) / 2) - ((10 * strlen(button->title)) / 2);
+	draw_text(dc, &temp, button->title, RGB(200, 200, 200));
+
+	SelectObject(dc, (HGDIOBJ)fFontOld);
+	SelectObject(dc, (HGDIOBJ)hBrushold);
+	SelectObject(dc, (HGDIOBJ)hPenold);
+}
+
+void draw_parm_slider(HDC dc, LPRECT rect, parm_slider_t *slider)
+{
+	char msg[100];
+	float fval;
+	float fmin;
+	float fmax;
+	float fpct;
+
+	HFONT fFontOld = (HFONT)SelectObject(dc, (HGDIOBJ)hFont);
+	HBRUSH hBrushold = (HBRUSH)SelectObject(dc, (HGDIOBJ)hBackBrush);
+	HPEN hPenold;
+
+	memcpy(&slider->frameRect, rect, sizeof(RECT));
+
+	rect->top += 20;
+	rect->right = rect->left + RIGHT_PANEL_SIZE - 20;
+	rect->bottom = rect->top + 20;
+
+	if (slider->type)
+		fval = *((float*)(slider->data));
+	else
+		fval = (float) *((int*)(slider->data));
+	fmax = max((float)slider->min, (float)slider->max);
+	fmin = min((float)slider->min, (float)slider->max);
+	fval = min(fmax, max(fmin, fval));
+	fpct = fval / (max(fmin, fmax) - min(fmin, fmax));
+
+	int k = 2;
+	RECT clear;
+	memcpy(&clear, rect, sizeof(RECT));
+	clear.left -= k + 1;
+	clear.top -= k + 1;
+	clear.right += k + 1;
+	clear.bottom += k + 1;
+	FillRect(dc, &clear, hBackBrush);
+	if (g_Hovering == slider)
+		hPenold = (HPEN)SelectObject(dc, (HGDIOBJ)hBrightPen);
+	else
+		hPenold = (HPEN)SelectObject(dc, (HGDIOBJ)hRiverPen);
+	MoveToEx(dc, rect->left, rect->top, NULL);
+	LineTo(dc, rect->right, rect->top);
+	LineTo(dc, rect->right, rect->bottom);
+	LineTo(dc, rect->left, rect->bottom);
+	LineTo(dc, rect->left, rect->top);
+	memcpy(&slider->scrRect, rect, sizeof(RECT));
+	int x = (int)(rect->left + ((rect->right - rect->left) * fpct));
+	HGDIOBJ oldObj = SelectObject(dc,(HGDIOBJ)hBrightPen);
+	for (int i = 0; i < 3; i++)
+	{
+		MoveToEx(dc, x + i, rect->top - k, NULL);
+		LineTo(dc, x + i, rect->bottom + k);
+		if (i > 0)
+		{
+			MoveToEx(dc, x - i, rect->top - k, NULL);
+			LineTo(dc, x - i, rect->bottom + k);
+		}
+	}
+	SelectObject(dc,oldObj);
+
+	rect->top -= 20;
+	sprintf(msg, "%s:", slider->title);
+	draw_text(dc, rect, msg, RGB(200, 200, 200));
+	if (slider->type)
+		sprintf(msg, "%4.2f", *((float*)(slider->data)));
+	else
+		sprintf(msg, "%4i", *((int*)(slider->data)));
+	rect->right = rect->left + RIGHT_PANEL_SIZE;
+	rect->left = rect->right - (strlen(msg) * 10) - 20;
+	draw_text(dc, rect, msg, RGB(200, 200, 200));
+
+	rect->top += 50;
+
+	SelectObject(dc, (HGDIOBJ)fFontOld);
+	SelectObject(dc, (HGDIOBJ)hBrushold);
+	SelectObject(dc, (HGDIOBJ)hPenold);
+}
+
+void move_parm_slider(HWND hwnd, parm_slider_t *slider, int x)
+{
+	float fval;
+	float fmin;
+	float fmax;
+	float fpct;
+
+	if (slider->type)
+		fval = *((float*)(slider->data));
+	else
+		fval = (float)*((int*)(slider->data));
+
+	fmax = max((float)slider->min, (float)slider->max);
+	fmin = min((float)slider->min, (float)slider->max);
+
+	x = max(slider->scrRect.left, min(x, slider->scrRect.right));
+	fpct = float(x-slider->scrRect.left) / float(slider->scrRect.right - slider->scrRect.left);
+		
+	fval = fmin + (fpct * (fmax - fmin));
+
+	if (slider->type)
+		*((float*)(slider->data)) = fval;
+	else
+		*((int*)(slider->data)) = (int) fval;
+
+	HDC dc = GetDC(hwnd);
+	RECT rect;
+	
+	memcpy(&rect, &slider->frameRect, sizeof(RECT));
+	draw_parm_slider(dc, &rect, slider);
+
+	evolve_parms_update(&g_EvolveState, &g_EvolveParms);
+
+	ReleaseDC(hwnd, dc);
 }
 
 void draw_creature(HDC dc, LPRECT rect, const creature_t *creature)
@@ -93,7 +337,9 @@ void draw(HWND hwnd, int step, int refresh)
 		CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH, TEXT("Consolas"));
 
 		hBackBrush = CreateSolidBrush(bkColor);
+		hBrightBrush = CreateSolidBrush(RGB(128, 128, 192));
 		hRiverPen = CreatePen( PS_SOLID, 2, RGB(64, 64, 96) );
+		hBrightPen = CreatePen(PS_SOLID, 2, RGB(128, 128, 192));
 	}
 
 	hFontold = (HFONT)SelectObject(hdc, (HGDIOBJ)hFont);
@@ -102,10 +348,7 @@ void draw(HWND hwnd, int step, int refresh)
 
 	RECT fill;
 
-	GetWindowRect(hwnd, &fill);
-	fill.bottom += fill.top;
-	fill.right += fill.left;
-	fill.top = fill.left = 0;
+	GetClientRect(hwnd, &fill);
 
 	static int last_col;
 
@@ -123,16 +366,16 @@ void draw(HWND hwnd, int step, int refresh)
 
 			if (g_Stats)
 			{
-				rect.left = 6;
-				rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20;
-				draw_text(hdc, &rect, "Generations:", RGB(200, 200, 200));
-				rect.left += 175;
-				draw_text(hdc, &rect, "Species:", RGB(200, 200, 200));
-				rect.left += 125;
-				draw_text(hdc, &rect, "Extinctions:", RGB(200, 200, 200));
-				rect.left += 145;
-				draw_text(hdc, &rect, "Mass Extincts:", RGB(200, 200, 200));
-				rect.left += 160;
+				MoveToEx(hdc, fill.right - RIGHT_PANEL_SIZE, fill.top, NULL);
+				LineTo(hdc, fill.right - RIGHT_PANEL_SIZE, fill.bottom);
+
+				rect.left = fill.right - RIGHT_PANEL_SIZE + 10;
+				rect.top = 10;
+				for (i = 0; i < ES_COUNT; i++)
+				{
+					draw_text(hdc, &rect, g_statNames[i], RGB(200, 200, 200));
+					rect.top += 20;
+				}
 				draw_text(hdc, &rect, "Predation:", RGB(200, 200, 200));
 			}
 
@@ -162,9 +405,71 @@ void draw(HWND hwnd, int step, int refresh)
 				draw_creature(hdc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
 			}
 		}
+	}
+
+	i = (step % g_EvolveState.popSize) / g_EvolveState.parms.popCols;
+	j = (step % g_EvolveState.popSize) % g_EvolveState.parms.popCols;
+	rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
+	rect.top = 35 + (i *20);
+	draw_creature(hdc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
+
+	if ( g_Stats && clock() - lastStats > 250)
+	{
+		rect.top = 10;
+		for (i = 0; i < ES_COUNT; i++)
+		{
+			sprintf(msg, "%i", g_EvolveState.stats[i]);
+			rect.left = (fill.right - 10) - strlen(msg) * 10;
+			draw_text(hdc, &rect, msg, RGB(200, 200, 200));
+			rect.top += 20;
+		}
+
+		static int lastPredation;
+		if (g_EvolveState.predation > 0.0f && g_EvolveState.rebirth <= 0)
+		{
+			sprintf(msg, " ON");
+			rect.left = (fill.right - 10) - 3 * 10;
+			draw_text(hdc, &rect, msg, RGB(255, 200, 200));
+			if (!lastPredation)
+				g_Refresh = 1;
+		}
+		else
+		{
+			sprintf(msg, "OFF");
+			rect.left = (fill.right - 10) - 3 * 10;
+			draw_text(hdc, &rect, msg, RGB(200, 255, 200));
+			if (lastPredation)
+				g_Refresh = 1;
+		}
+		lastPredation = g_EvolveState.predation > 0.0f && g_EvolveState.rebirth <= 0;
+
+		rect.top += 20;
+		rect.top += 20;
+
+		for (i = 0; i < sizeof(g_parmSliders) / sizeof(parm_slider_t); i++)
+		{
+			rect.left = fill.right - RIGHT_PANEL_SIZE + 10;
+			draw_parm_slider(hdc, &rect, &g_parmSliders[i]);
+		}
+
+		rect.top += 10;
+		rect.left = fill.right - RIGHT_PANEL_SIZE + 10;
+		rect.bottom = rect.top + 30;
+		rect.right = fill.right - 10;
+		for (i = 0; i < sizeof(g_Buttons) / sizeof(button_t); i++)
+		{
+			draw_button(hdc, &rect, &g_Buttons[i]);
+			rect.top += 40;
+			rect.bottom += 40;
+		}
 
 		for (i = 0; i < g_EvolveState.parms.popCols; i++)
 		{
+			fill.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i);
+			fill.bottom = fill.top + 45;
+			fill.right -= RIGHT_PANEL_SIZE + 1;
+			FillRect(hdc, &fill, hBackBrush);
+
 			if (!g_EvolveState.record[i][0].creature.genes[0])
 				continue;
 
@@ -195,45 +500,7 @@ void draw(HWND hwnd, int step, int refresh)
 			else
 				draw_text(hdc, &rect, msg, RGB(128, 128, 128));
 		}
-	}
 
-	i = (step % g_EvolveState.popSize) / g_EvolveState.parms.popCols;
-	j = (step % g_EvolveState.popSize) % g_EvolveState.parms.popCols;
-	rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
-	rect.top = 35 + (i *20);
-	draw_creature(hdc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
-
-	if ( g_Stats && clock() - lastStats > 250)
-	{
-		rect.left = 6;
-		rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20;
-		rect.left += 110;
-		sprintf(msg, "%i", g_EvolveState.generation);
-		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
-		rect.left += 140;
-		sprintf(msg, "%i/%i", g_EvolveState.speciesNow, g_EvolveState.speciesEver);
-		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
-		rect.left += 160;
-		sprintf(msg, "%i", g_EvolveState.extinctions);
-		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
-		rect.left += 165;
-		sprintf(msg, "%i", g_EvolveState.massExtinctions);
-		draw_text(hdc, &rect, msg, RGB(200, 200, 200));
-		rect.left += 121;
-		static int lastPredation;
-		if (g_EvolveState.predation > 0.0f && g_EvolveState.rebirth <= 0)
-		{
-			draw_text(hdc, &rect, "ON", RGB(255, 200, 200));
-			if (!lastPredation)
-				g_Refresh = 1;
-		}
-		else
-		{
-			draw_text(hdc, &rect, "OFF", RGB(200, 255, 200));
-			if (lastPredation)
-				g_Refresh = 1;
-		}
-		lastPredation = g_EvolveState.predation > 0.0f && g_EvolveState.rebirth <= 0;
 		lastStats = clock();
 	}
 
@@ -246,23 +513,121 @@ void draw(HWND hwnd, int step, int refresh)
 //	EndPaint(hwnd, &ps);
 }
 
-void evolve_win_tick(HWND hwnd, int refresh)
+void evolve_win_tick()
 {
 	if (!initialized)
 	{
-		evolve_parms_t parms;
+		evolve_parms_default(&g_EvolveParms);
 
-		evolve_parms_default(&parms);
-
-		evolve_init(&g_EvolveState, &parms);
+		evolve_init(&g_EvolveState, &g_EvolveParms);
 
 		initialized = true;
 	}
 
-	int drawStep = g_EvolveState.step;
-
 	evolve_simulate(&g_EvolveState);
+}
 
+void evolve_win_draw(HWND hwnd)
+{
+	if (!initialized)
+		return;
+
+	int refresh = g_Refresh;
+	g_Refresh = 0;
+
+	int drawStep = g_EvolveState.step - 1;
+	if (drawStep < 0)
+		drawStep = (g_EvolveState.popSize * 2) - 1;
 	draw(hwnd, drawStep, refresh);
 }
 
+void evolve_win_mouse_move(HWND hwnd, int x, int y)
+{
+	if (g_sliderEditing)
+		move_parm_slider(hwnd, g_sliderEditing, x);
+
+	g_Hovering = NULL;
+
+	for (int i = 0; i < sizeof(g_parmSliders) / sizeof(parm_slider_t); i++)
+	{
+		if (g_parmSliders[i].scrRect.left <= x && g_parmSliders[i].scrRect.right >= x &&
+			g_parmSliders[i].scrRect.top <= y && g_parmSliders[i].scrRect.bottom >= y)
+		{
+			g_Hovering = &g_parmSliders[i];
+			HDC dc = GetDC(hwnd);
+			RECT r;
+			memcpy(&r, &g_parmSliders[i].frameRect, sizeof(RECT));
+			draw_parm_slider(dc, &r, &g_parmSliders[i]);
+			ReleaseDC(hwnd, dc);
+		}
+	}
+
+	for (int i = 0; i < sizeof(g_Buttons) / sizeof(button_t); i++)
+	{
+		if (g_Buttons[i].frameRect.left <= x && g_Buttons[i].frameRect.right >= x &&
+			g_Buttons[i].frameRect.top <= y && g_Buttons[i].frameRect.bottom >= y)
+		{
+			g_Hovering = &g_Buttons[i];
+			HDC dc = GetDC(hwnd);
+			draw_button(dc, &g_Buttons[i].frameRect, &g_Buttons[i]);
+			ReleaseDC(hwnd, dc);
+		}
+	}
+}
+
+void evolve_win_mouse_down(HWND hwnd, int x, int y)
+{
+	for (int i = 0; i < sizeof(g_parmSliders) / sizeof(parm_slider_t); i++)
+	{
+		if (g_parmSliders[i].scrRect.left <= x && g_parmSliders[i].scrRect.right >= x &&
+			g_parmSliders[i].scrRect.top <= y && g_parmSliders[i].scrRect.bottom >= y)
+		{
+			g_sliderEditing = &g_parmSliders[i];
+			return;
+		}
+	}
+
+	for (int i = 0; i < sizeof(g_Buttons) / sizeof(button_t); i++)
+	{
+		if (g_Buttons[i].frameRect.left <= x && g_Buttons[i].frameRect.right >= x &&
+			g_Buttons[i].frameRect.top <= y && g_Buttons[i].frameRect.bottom >= y)
+		{
+			g_buttonClicking = &g_Buttons[i];
+			HDC dc = GetDC(hwnd);
+			draw_button(dc, &g_buttonClicking->frameRect, g_buttonClicking);
+			ReleaseDC(hwnd, dc);
+			break;
+		}
+	}
+}
+
+void evolve_win_mouse_up(HWND hwnd, int x, int y)
+{
+	if (g_sliderEditing)
+	{
+		HDC dc = GetDC(hwnd);
+		draw_parm_slider(dc, &g_sliderEditing->frameRect, g_sliderEditing);
+		ReleaseDC(hwnd, dc);
+
+		if (g_sliderEditing->fullRefresh )
+			evolve_init(&g_EvolveState, &g_EvolveParms);
+	}
+
+	g_sliderEditing = NULL;
+
+	if (g_buttonClicking)
+	{
+		HDC dc = GetDC(hwnd);
+		button_t *drawButton = g_buttonClicking;
+		g_buttonClicking = NULL;
+		draw_button(dc, &drawButton->frameRect, drawButton);
+		ReleaseDC(hwnd, dc);
+
+		if (drawButton->frameRect.left <= x && drawButton->frameRect.right >= x &&
+			drawButton->frameRect.top <= y && drawButton->frameRect.bottom >= y)
+		{
+			if (drawButton->func)
+				drawButton->func();
+		}
+	}
+}

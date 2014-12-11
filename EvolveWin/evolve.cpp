@@ -340,6 +340,8 @@ void record_species(creature_t *creature, int generation, int alive)
 		memcpy(&state->record[x][y].creature, creature, sizeof(creature_t));
 		memcpy(&state->record[x][y].environment, &state->environment[creature_col(creature)], sizeof(creature_t));
 
+		state->stats[ES_SPECIES_MAX_AGE] = max(state->stats[ES_SPECIES_MAX_AGE], generation - state->record[x][0].generation + 1);
+
 		state->record[x][y].creature.age = 0;
 
 		if (!alive)
@@ -383,9 +385,9 @@ void breed_creature(evolve_state_t *state,creature_t *child, creature_t *parentA
 		for (i = 0; i < state->parms.genes; i++)
 			child->genes[i] = random_letter(state);
 		child->genes[state->parms.genes] = 0;
-		state->speciesEver++;
-		child->species = state->speciesEver;
-		record_species(child, state->generation,1);
+		state->stats[ES_SPECIES_EVER]++;
+		child->species = state->stats[ES_SPECIES_EVER];
+		record_species(child, state->stats[ES_GENERATIONS], 1);
 	}
 
 	// 1 Genetic Mutation
@@ -429,10 +431,10 @@ void breed_creature(evolve_state_t *state,creature_t *child, creature_t *parentA
 
 	if (newSpeciesCnt >= state->parms.speciesNew && newSpeciesCnt <= oldSpeciesCnt)
 	{
-		state->speciesEver++;
+		state->stats[ES_SPECIES_EVER]++;
 		for (i = 0; i < newSpeciesCnt; i++)
-			newSpecies[i]->species = state->speciesEver;
-		record_species(newSpecies[rand()%newSpeciesCnt], state->generation,1);
+			newSpecies[i]->species = state->stats[ES_SPECIES_EVER];
+		record_species(newSpecies[rand() % newSpeciesCnt], state->stats[ES_GENERATIONS], 1);
 	}
 }
 
@@ -529,13 +531,13 @@ void die( creature_t *creature )
 		{
 			// If there are still creatures alive of the same species (even if we cannot physically mate with them at this time)
 			//  then this is not considered an extinction
-			if ( creature->species == state->creatures[i].species && state->creatures[i].genes[0] )
+			if (creature != &state->creatures[i] && creature->species == state->creatures[i].species && state->creatures[i].genes[0])
 				break;
 		}
 		if (i == state->popSize)
 		{
-			state->extinctions++;
-			record_species(creature, state->generation, 0);
+			state->stats[ES_EXTINCTIONS]++;
+			record_species(creature, state->stats[ES_GENERATIONS], 0);
 		}
 
 		memset(creature, 0, sizeof(creature_t));
@@ -593,7 +595,7 @@ void current_population( evolve_state_t *state )
 	int i;
 	int j;
 	int speciesList[POP_MAX];
-	state->speciesNow = 0;
+	state->stats[ES_SPECIES_NOW] = 0;
 	state->population[0] = 0;
 	state->population[1] = 0;
 
@@ -607,15 +609,15 @@ void current_population( evolve_state_t *state )
 		else
 			state->population[1]++;
 
-		for (j = 0; j < (int) state->speciesNow; j++)
+		for (j = 0; j < (int)state->stats[ES_SPECIES_NOW]; j++)
 		{
 			if (state->creatures[i].species == speciesList[j])
 				break;
 		}
-		if (j == state->speciesNow)
+		if (j == state->stats[ES_SPECIES_NOW])
 		{
-			speciesList[state->speciesNow] = state->creatures[i].species;
-			state->speciesNow++;
+			speciesList[state->stats[ES_SPECIES_NOW]] = state->creatures[i].species;
+			state->stats[ES_SPECIES_NOW]++;
 		}
 	}
 }
@@ -691,6 +693,25 @@ void evolve_parms_default(evolve_parms_t *parms)
 	parms->genes = 8;
 }
 
+void evolve_parms_update(evolve_state_t *state, evolve_parms_t *parms)
+{
+	state->parms.ageDeath = parms->ageDeath;
+	state->parms.ageMature = parms->ageMature;
+	state->parms.rebirthGenerations = parms->rebirthGenerations;
+	state->parms.predationLevel = parms->predationLevel;
+	state->parms.speciesMatch = parms->speciesMatch;
+	state->parms.speciesNew = parms->speciesNew;
+	state->parms.envChangeRate = parms->envChangeRate;
+
+	state->predation = state->parms.predationLevel;
+
+	// cannot be updated without full re-init
+	// state->parms->popRows = 22;
+	// state->parms->popCols = 8;
+	// state->strcpy(parms->alphabet, "abcdefghABCDEFGH");
+	// state->parms->genes = 8;
+}
+
 bool evolve_init(evolve_state_t *state, evolve_parms_t *parms)
 {
 	memset(state, 0, sizeof(evolve_state_t));
@@ -709,7 +730,7 @@ bool evolve_init(evolve_state_t *state, evolve_parms_t *parms)
 	if (state->parms.ageDeath <= state->parms.ageMature)
 		return false;
 
-	state->generation = 1;
+	state->stats[ES_GENERATIONS] = 1;
 	state->predation = state->parms.predationLevel;
 	state->alphabet_size = strlen(state->parms.alphabet);
 	state->popSize = state->parms.popRows * state->parms.popCols;
@@ -760,11 +781,11 @@ void evolve_simulate(evolve_state_t *state)
 
 	if (state->population[0] == 0 && state->population[1] == 0)
 	{
-		state->massExtinctions++;
-		state->speciesEver++;
-		state->creatureLastAlive[0].species = state->speciesEver;
-		state->speciesEver++;
-		state->creatureLastAlive[1].species = state->speciesEver;
+		state->stats[ES_EXTINCTIONS_MASS]++;
+		state->stats[ES_SPECIES_EVER]++;
+		state->creatureLastAlive[0].species = state->stats[ES_SPECIES_EVER];
+		state->stats[ES_SPECIES_EVER]++;
+		state->creatureLastAlive[1].species = state->stats[ES_SPECIES_EVER];
 
 		// Initiate a rebirth
 		evolve_rebirth(state, true);
@@ -772,7 +793,7 @@ void evolve_simulate(evolve_state_t *state)
 		for (int i = 0; i < state->popSize; i++)
 		{
 			if (state->creatures[state->orderTable[i]].genes[0])
-				record_species(&state->creatures[state->orderTable[i]], state->generation, 1);
+				record_species(&state->creatures[state->orderTable[i]], state->stats[ES_GENERATIONS], 1);
 		}
 
 		state->step = 0;
@@ -780,13 +801,13 @@ void evolve_simulate(evolve_state_t *state)
 
 	if (state->step >= (state->popSize * 2))
 	{
-		state->generation++;
-		if (state->generation % state->parms.envChangeRate == 0)
+		state->stats[ES_GENERATIONS]++;
+		if (state->stats[ES_GENERATIONS] % state->parms.envChangeRate == 0)
 		{
 			for (int i = 0; i < state->popSize; i++)
 			{
 				if (state->creatures[state->orderTable[i]].genes[0])
-					record_species(&state->creaturesstate->orderTable[i]], state->generation,1);
+					record_species(&state->creatures[state->orderTable[i]], state->stats[ES_GENERATIONS], 1);
 			}
 
 			random_environments(state, state->environment, state->parms.popCols);
@@ -815,7 +836,10 @@ void evolve_asteroid(evolve_state_t *state)
 {
 	randomize_order(state);
 	for (int i = 0; i < state->popSize; i++)
-		die(&state->creatures[state->orderTable[i]]);
+	{
+		if (state->creatures[state->orderTable[i]].genes[0])
+			die(&state->creatures[state->orderTable[i]]);
+	}
 	state->rebirth = 0;
 }
 
