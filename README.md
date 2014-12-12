@@ -10,4 +10,4 @@ Winvolve
 * Procreation likewise prefers those that are most vibrant against the environment.
 * Result tends toward camoflaged yet with bits of vibrance.
  
-http://i.imgur.com/Gfdr9oF.jpg
+1.0 Screenshot: http://i.imgur.com/Gfdr9oF.jpg
