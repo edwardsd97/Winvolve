@@ -197,8 +197,17 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
+	int x, y;
 	PAINTSTRUCT ps;
 	HDC hdc;
+	RECT clRect;
+
+	if (message >= WM_MOUSEFIRST && message <= WM_MOUSELAST)
+	{
+		x = LOWORD(lParam);
+		y = HIWORD(lParam);
+		GetClientRect(hWnd, &clRect);
+	}
 
 	switch (message)
 	{
@@ -258,13 +267,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		EndPaint(hWnd, &ps);
 		break;
 	case WM_MOUSEMOVE:
-		evolve_win_mouse_move(hWnd, hdcMem, LOWORD(lParam), HIWORD(lParam));
+		evolve_win_mouse_move(hWnd, hdcMem, x, y);
+		if ( x > clRect.right || x < 0 || y > clRect.bottom || y < 0 )
+			evolve_win_mouse_up(hWnd, hdcMem, x, y);
 		break;
 	case WM_LBUTTONDOWN:
-		evolve_win_mouse_down(hWnd, hdcMem, LOWORD(lParam), HIWORD(lParam));
+		evolve_win_mouse_down(hWnd, hdcMem, x, y);
 		break;
 	case WM_LBUTTONUP:
-		evolve_win_mouse_up(hWnd, hdcMem, LOWORD(lParam), HIWORD(lParam));
+		evolve_win_mouse_up(hWnd, hdcMem, x, y);
 		break;
 	case WM_DESTROY:
 		g_Quit = 1;

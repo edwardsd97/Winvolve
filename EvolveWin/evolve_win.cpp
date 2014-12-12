@@ -24,7 +24,7 @@ HBITMAP hbmMem;
 HBITMAP hbmOld;
 
 const char *SAVE_NAME = "winvolve.sav";
-const int SAVE_VER = 1;
+const int SAVE_VER = 2;
 
 extern int g_Refresh;
 extern int g_Stats;
@@ -71,13 +71,14 @@ const char *g_statNames[] =
 
 evolve_parms_t g_EvolveParms;
 
-parm_slider_t g_parmSliders[10] =
+parm_slider_t g_parmSliders[11] =
 {
+	{ &g_EvolveParms.predationLevel, 0, 1, 1, 0, "Predation" },
+	{ &g_EvolveParms.procreationLevel, 0, 1, 1, 0, "Procreation" },
+	{ &g_EvolveParms.speciesMatch, 0, 1, 1, 0, "Species Match Req" },
 	{ &g_EvolveParms.ageDeath, 1, 20, 0, 0, "Age of Death" },
 	{ &g_EvolveParms.ageMature, 0, 19, 0, 0, "Age of Maturity" },
 	{ &g_EvolveParms.rebirthGenerations, 0, 100, 0, 0, "Rebirth Generations" },
-	{ &g_EvolveParms.predationLevel, 0, 1, 1, 0, "Predation Level" },
-	{ &g_EvolveParms.speciesMatch, 0, 1, 1, 0, "Species Match Req" },
 	{ &g_EvolveParms.speciesNew, 1, 50, 0, 0, "Min Species Pop" },
 	{ &g_EvolveParms.envChangeRate, 1, 1000, 0, 0, "Enviro Change Rate" },
 	{ &g_EvolveParms.genes, 1, 32, 0, 1, "Gene Count (*)" },
@@ -311,7 +312,7 @@ void draw_parm_slider(HDC dc, LPRECT rect, parm_slider_t *slider)
 	rect->left = rect->right - (strlen(msg) * 10) - 20;
 	draw_text(dc, rect, msg, RGB(200, 200, 200));
 
-	rect->top += 50;
+	rect->top += 45;
 
 	SelectObject(dc, (HGDIOBJ)fFontOld);
 	SelectObject(dc, (HGDIOBJ)hBrushold);
@@ -763,8 +764,11 @@ void evolve_win_mouse_up(HWND hwnd, HDC dc, int x, int y)
 
 		if (g_sliderEditing->fullRefresh)
 		{
-			evolve_init(&g_EvolveState, &g_EvolveParms);
-			g_Refresh = 1;
+			if (memcmp(&g_EvolveState.parms, &g_EvolveParms, sizeof( g_EvolveParms) ))
+			{
+				evolve_init(&g_EvolveState, &g_EvolveParms);
+				g_Refresh = 1;
+			}
 		}
 	}
 

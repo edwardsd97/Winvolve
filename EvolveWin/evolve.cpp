@@ -504,7 +504,7 @@ void random_environments(evolve_state_t *state, creature_t *envs, int count)
 }
 
 
-int find_best(creature_t *creature, score_func func)
+int find_best(creature_t *creature, score_func func, float *resultScore = NULL)
 {
 	evolve_state_t *state = creature->state;
 
@@ -521,6 +521,9 @@ int find_best(creature_t *creature, score_func func)
 			result = i;
 		}
 	}
+
+	if (resultScore)
+		(*resultScore) = bestScore;
 
 	return result;
 }
@@ -579,11 +582,11 @@ void survive( creature_t *creature )
 
 	if (state->predation > 0.0f && state->rebirth <= 0)
 	{
-		// Predation: See if one of us getss eaten
-		int eaten = find_best(creature, score_predatory);
+		// Predation: See if one of us gets eaten
+		float score;
+		int eaten = find_best(creature, score_predatory, &score);
 		if (eaten >= 0)
 		{
-			float score = score_predatory(&state->creatures[eaten], &state->creatures[eaten]);
 			if (randf() < score * state->predation)
 				die(&state->creatures[eaten]);
 		}
@@ -601,10 +604,14 @@ void procreate(creature_t *creature)
 	evolve_state_t *state = creature->state;
 
 	// Find best creature to mate
-	int mate = find_best(creature, score_mate);
+	float score;
+	int mate = find_best(creature, score_mate, &score);
 	int free = find_best(creature, score_free);
 	if (mate >= 0 && free >= 0)
-		breed_creature(state, &state->creatures[free], creature, &state->creatures[mate]);
+	{
+		if (randf() < score * state->parms.procreationLevel)
+			breed_creature(state, &state->creatures[free], creature, &state->creatures[mate]);
+	}
 }
 
 void current_population( evolve_state_t *state )
@@ -699,7 +706,8 @@ void evolve_parms_default(evolve_parms_t *parms)
 	parms->ageDeath				= 5;
 	parms->ageMature			= 2;
 	parms->rebirthGenerations	= 10;
-	parms->predationLevel		= 0.85f;
+	parms->predationLevel		= 0.50f;
+	parms->procreationLevel		= 1.0f;
 	parms->speciesMatch			= 0.5f;
 	parms->speciesNew			= 6;
 	parms->popRows				= 22;
@@ -717,6 +725,7 @@ void evolve_parms_update(evolve_state_t *state, evolve_parms_t *parms)
 	state->parms.ageMature = parms->ageMature;
 	state->parms.rebirthGenerations = parms->rebirthGenerations;
 	state->parms.predationLevel = parms->predationLevel;
+	state->parms.procreationLevel = parms->procreationLevel;
 	state->parms.speciesMatch = parms->speciesMatch;
 	state->parms.speciesNew = parms->speciesNew;
 	state->parms.envChangeRate = parms->envChangeRate;

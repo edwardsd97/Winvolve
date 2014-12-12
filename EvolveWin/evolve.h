@@ -39,6 +39,7 @@ typedef struct evolve_parms_s
 	int		ageMature;				// Generation from birth required to mate
 	int		rebirthGenerations;		// Generations after catastrophe that no predation occurs
 	float	predationLevel;			// Level of Predation (0.0 to 1.0)
+	float	procreationLevel;		// Level of Procreation (0.0 to 1.0)
 	float	speciesMatch;			// Level of matching genes required to mate (0.0 to 1.0)
 	int		speciesNew;				// Minimum non matching creatures to define a new species
 	int		genes;					// Number of genomes in a gene
