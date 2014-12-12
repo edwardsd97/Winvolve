@@ -9,3 +9,5 @@ Winvolve
 * Predation targets those that stand out the most against the environment.
 * Procreation likewise prefers those that are most vibrant against the environment.
 * Result tends toward camoflaged yet with bits of vibrance.
+ 
+http://i.imgur.com/Gfdr9oF.jpg
