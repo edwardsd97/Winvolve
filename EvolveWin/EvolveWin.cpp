@@ -11,12 +11,12 @@
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
-HWND hWnd;										// current window
+HWND g_hWnd;										// current window
 TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
 int g_Quit = 0;
 int g_Refresh = 1;
-int g_Stats = 1;
+int g_Stats = 0;
 evolve_state_t g_EvolveState;
 
 extern HFONT hFont;
@@ -84,7 +84,7 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 			evolve_win_tick();
 
 			if (g_EvolveState.step % 2 == 0)
-				evolve_win_draw(hWnd);
+				evolve_win_draw(g_hWnd);
 
 			clock_t end = clock();
 			nextTick = clock() + max(1, int(ceil((1000.0f / float(generationsPerSecond)) / float(g_EvolveState.popSize*2))) - (end - start));
@@ -129,9 +129,12 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	return RegisterClassEx(&wcex);
 }
 
-void resize(HWND hWnd)
+void resize(HWND hWnd = NULL)
 {
 	RECT window;
+
+	if (hWnd == NULL)
+		hWnd = g_hWnd;
 
 	GetWindowRect(hWnd, &window);
 
@@ -170,16 +173,16 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 
    int dwStyle = (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX);
 
-   hWnd = CreateWindow(szWindowClass, szTitle, dwStyle,
+   g_hWnd = CreateWindow(szWindowClass, szTitle, dwStyle,
       CW_USEDEFAULT, 0, 980, 950, NULL, NULL, hInstance, NULL);
 
-   if (!hWnd)
+   if (!g_hWnd)
    {
       return FALSE;
    }
 
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
+   ShowWindow(g_hWnd, nCmdShow);
+   UpdateWindow(g_hWnd);
 
    return TRUE;
 }

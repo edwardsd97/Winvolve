@@ -24,11 +24,13 @@ HBITMAP hbmMem;
 HBITMAP hbmOld;
 
 const char *SAVE_NAME = "winvolve.sav";
-const int SAVE_VER = 2;
+const int SAVE_VER = 3;
 
 extern int g_Refresh;
 extern int g_Stats;
 extern evolve_state_t g_EvolveState;
+
+void resize(HWND hWnd = NULL);
 
 int RIGHT_PANEL_SIZE = 230;
 
@@ -123,6 +125,7 @@ void click_save()
 		int *start = (int*)(&g_EvolveState);
 		int *write = start;
 		fwrite(&SAVE_VER, sizeof(SAVE_VER), 1, f);
+		fwrite(&g_Stats, sizeof(g_Stats), 1, f);
 		while ((write - start) < (sizeof(g_EvolveState) / sizeof(int)))
 		{
 			if (fwrite(write++, sizeof(int), 1, f) != 1)
@@ -147,6 +150,7 @@ void click_load()
 		int *write = start;
 		int saveVer;
 		fread(&saveVer, sizeof(SAVE_VER), 1, f);
+		fread(&g_Stats, sizeof(g_Stats), 1, f);
 		if (saveVer != SAVE_VER)
 		{
 			fclose(f);
@@ -648,6 +652,8 @@ void evolve_win_tick()
 		}
 
 		initialized = true;
+
+		resize();
 	}
 
 	int extinctions = g_EvolveState.stats[ES_EXTINCTIONS];
