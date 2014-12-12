@@ -285,7 +285,23 @@ void record_species(creature_t *creature, int generation, int alive)
 
 	evolve_state_t *state = creature->state;
 
-	for (x = 0; x < state->parms.popCols; x++)
+	int oldestSpeciesAge = -1;
+	int oldestSpeciesDeadOrAlive = -1;
+	for (x = 0; x < state->parms.historySpecies; x++)
+	{
+		for (y = 0; y < state->parms.popCols; y++)
+		{
+			int speciesAge = state->record[x][y].generation - state->record[x][0].generation + 1;
+			if (speciesAge > oldestSpeciesAge)
+			{
+				oldestSpeciesAge = speciesAge;
+				oldestSpeciesDeadOrAlive = x;
+			}
+		}
+	}
+
+
+	for (x = 0; x < state->parms.historySpecies; x++)
 	{
 		if (!state->record[x][0].generation && open < 0)
 			open = x;
@@ -294,6 +310,10 @@ void record_species(creature_t *creature, int generation, int alive)
 		{
 			if (!state->record[x][y].generation)
 				break;
+
+			// Always keep the oldest species ever in the history
+			if (oldestSpeciesDeadOrAlive == x)
+				continue;
 
 			if (oldest == -1 || state->record[x][y].generation < oldest)
 			{
@@ -317,15 +337,15 @@ void record_species(creature_t *creature, int generation, int alive)
 	if (open < 0)
 		open = oldestIdx;
 
-	if (open >= 0 && x >= state->parms.popCols)
+	if (open >= 0 && x >= state->parms.historySpecies)
 	{
 		// Start a new slot
 		x = open;
 		y = 0;
-		memset(state->record[x], 0, sizeof(creature_t) * SPECIES_HIST_COLS);
+		memset(state->record[x], 0, sizeof(state->record[x]));
 	}
 
-	if (x < state->parms.popCols )
+	if (x < state->parms.historySpecies)
 	{
 		// Shift down records if necessary (except the first one)
 		if (y >= state->parms.popCols)
@@ -337,18 +357,13 @@ void record_species(creature_t *creature, int generation, int alive)
 
 		// Add record
 		state->record[x][y].generation = generation;
-		memcpy(&state->record[x][y].creature, creature, sizeof(creature_t));
-		memcpy(&state->record[x][y].environment, &state->environment[creature_col(creature)], sizeof(creature_t));
+		memcpy(&(state->record[x][y].creature), creature, sizeof(creature_t));
+		memcpy(&(state->record[x][y].environment), &state->environment[creature_col(creature)], sizeof(creature_t));
 
 		state->stats[ES_SPECIES_MAX_AGE] = max(state->stats[ES_SPECIES_MAX_AGE], generation - state->record[x][0].generation + 1);
 
-		state->record[x][y].creature.age = 0;
-
-		if (!alive)
-		{
-			for (y = 0; y < state->parms.popCols; y++)
-				state->record[x][y].creature.age = (state->parms.ageDeath / 2);
-		}
+		for (y = 0; y < state->parms.popCols; y++)
+			state->record[x][y].creature.age = alive ? 0 : (state->parms.ageDeath / 2);
 	}
 }
 
@@ -401,6 +416,8 @@ void breed_creature(evolve_state_t *state,creature_t *child, creature_t *parentA
 	int newSpeciesCnt = 0;
 	int oldSpeciesCnt = 0;
 	bool wasPossible;
+	memset(newSpecies, 0, sizeof(newSpecies));
+	memset(oldSpecies, 0, sizeof(oldSpecies));
 	for (i = 0; i < state->popSize; i++)
 	{
 		if (child == &state->creatures[i])
@@ -682,12 +699,13 @@ void evolve_parms_default(evolve_parms_t *parms)
 	parms->ageDeath				= 5;
 	parms->ageMature			= 2;
 	parms->rebirthGenerations	= 10;
-	parms->predationLevel		= 0.9f;
+	parms->predationLevel		= 0.85f;
 	parms->speciesMatch			= 0.5f;
 	parms->speciesNew			= 6;
 	parms->popRows				= 22;
 	parms->popCols				= 8;
 	parms->envChangeRate		= 100;
+	parms->historySpecies		= 8;
 
 	strcpy(parms->alphabet, "abcdefghABCDEFGH");
 	parms->genes = 8;
@@ -705,6 +723,11 @@ void evolve_parms_update(evolve_state_t *state, evolve_parms_t *parms)
 
 	state->predation = state->parms.predationLevel;
 
+	state->parms.ageDeath = max(state->parms.ageDeath, state->parms.ageMature + 1);
+	state->parms.ageMature = max(0, min(state->parms.ageDeath - 1, state->parms.ageMature));
+	parms->ageDeath = state->parms.ageDeath;
+	parms->ageMature = state->parms.ageMature;
+
 	// cannot be updated without full re-init
 	// state->parms->popRows = 22;
 	// state->parms->popCols = 8;
@@ -720,6 +743,8 @@ bool evolve_init(evolve_state_t *state, evolve_parms_t *parms)
 		evolve_parms_default(&state->parms);
 	else
 		state->parms = *parms;
+
+	evolve_parms_update(state, &state->parms);
 
 	if (state->parms.genes > GENES_MAX)
 		return false;

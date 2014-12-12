@@ -24,7 +24,14 @@ extern HBRUSH hBackBrush;
 extern HBRUSH hBrightBrush;
 extern HPEN hRiverPen;
 extern HPEN hBrightPen;
+extern int RIGHT_PANEL_SIZE;
 
+extern HDC hdcMem;
+extern RECT hdcMemRect;
+extern HBITMAP hbmMem;
+extern HBITMAP hbmOld;
+
+void click_save();
 
 // Forward declarations of functions included in this code module:
 ATOM				MyRegisterClass(HINSTANCE hInstance);
@@ -34,9 +41,9 @@ INT_PTR CALLBACK	About(HWND, UINT, WPARAM, LPARAM);
 
 void				evolve_win_tick();
 void				evolve_win_draw(HWND hwnd);
-void				evolve_win_mouse_move(HWND hwnd, int x, int y);
-void				evolve_win_mouse_down(HWND hwnd, int x, int y);
-void				evolve_win_mouse_up(HWND hwnd, int x, int y);
+void				evolve_win_mouse_move(HWND hwnd, HDC dc, int x, int y);
+void				evolve_win_mouse_down(HWND hwnd, HDC dc, int x, int y);
+void				evolve_win_mouse_up(HWND hwnd, HDC dc, int x, int y);
 
 int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
                      _In_opt_ HINSTANCE hPrevInstance,
@@ -76,7 +83,8 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 			
 			evolve_win_tick();
 
-			evolve_win_draw(hWnd);
+			if (g_EvolveState.step % 2 == 0)
+				evolve_win_draw(hWnd);
 
 			clock_t end = clock();
 			nextTick = clock() + max(1, int(ceil((1000.0f / float(generationsPerSecond)) / float(g_EvolveState.popSize*2))) - (end - start));
@@ -121,6 +129,31 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 	return RegisterClassEx(&wcex);
 }
 
+void resize(HWND hWnd)
+{
+	RECT window;
+
+	GetWindowRect(hWnd, &window);
+
+	int standardW = 980;
+	int standardH = 950;
+
+	if (g_Stats)
+	{
+		window.right = window.left + standardW;
+		window.bottom = window.top + standardH;
+	}
+	else
+	{
+		window.right = window.left + (standardW - RIGHT_PANEL_SIZE);
+		int standardNeeded = ((22 + 1) * 20) + 10;
+		int needed = ((g_EvolveState.parms.popRows + 1) * 20) + 10;
+		window.bottom = (window.top + standardH) - 410 + ((standardH - standardNeeded) - (standardH - needed));
+	}
+
+	MoveWindow(hWnd, window.left, window.top, window.right - window.left, window.bottom - window.top, true);
+}
+
 //
 //   FUNCTION: InitInstance(HINSTANCE, int)
 //
@@ -138,7 +171,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    int dwStyle = (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX);
 
    hWnd = CreateWindow(szWindowClass, szTitle, dwStyle,
-      CW_USEDEFAULT, 0, 980, 930, NULL, NULL, hInstance, NULL);
+      CW_USEDEFAULT, 0, 980, 950, NULL, NULL, hInstance, NULL);
 
    if (!hWnd)
    {
@@ -185,6 +218,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			DeleteObject((HGDIOBJ)hRiverPen);
 			DeleteObject((HGDIOBJ)hBrightBrush);
 			DeleteObject((HGDIOBJ)hBrightPen);
+			if (hbmOld)
+				SelectObject(hdcMem, hbmOld);
+			if (hbmMem)
+				DeleteObject(hbmMem);
+			if (hdcMem)
+				DeleteDC(hdcMem);
+			click_save();
 			DestroyWindow(hWnd);
 			break;
 		case IDM_PREDATION:
@@ -204,6 +244,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			break;
 		case IDM_STATS:
 			g_Stats = !g_Stats;
+			resize(hWnd);
 			g_Refresh = 1;
 			break;
 		default:
@@ -217,16 +258,17 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		EndPaint(hWnd, &ps);
 		break;
 	case WM_MOUSEMOVE:
-		evolve_win_mouse_move(hWnd, LOWORD(lParam), HIWORD(lParam));
+		evolve_win_mouse_move(hWnd, hdcMem, LOWORD(lParam), HIWORD(lParam));
 		break;
 	case WM_LBUTTONDOWN:
-		evolve_win_mouse_down(hWnd, LOWORD(lParam), HIWORD(lParam));
+		evolve_win_mouse_down(hWnd, hdcMem, LOWORD(lParam), HIWORD(lParam));
 		break;
 	case WM_LBUTTONUP:
-		evolve_win_mouse_up(hWnd, LOWORD(lParam), HIWORD(lParam));
+		evolve_win_mouse_up(hWnd, hdcMem, LOWORD(lParam), HIWORD(lParam));
 		break;
 	case WM_DESTROY:
 		g_Quit = 1;
+		click_save();
 		PostQuitMessage(0);
 		break;
 	default:

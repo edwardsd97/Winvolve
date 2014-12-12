@@ -4,7 +4,7 @@
 #define POP_ROWS_MAX		(32)
 #define POP_COLS_MAX		(32)
 #define POP_MAX				(POP_ROWS_MAX*POP_COLS_MAX)
-#define SPECIES_HIST_ROWS	(POP_ROWS_MAX/4)
+#define SPECIES_HIST_ROWS	(POP_ROWS_MAX)
 #define SPECIES_HIST_COLS	(POP_COLS_MAX)
 
 struct evolve_state_s;
@@ -16,7 +16,7 @@ typedef struct creature_s
 	evolve_state_s *state;
 	int				species;
 	int				age;
-	char			genes[GENES_MAX];
+	char			genes[GENES_MAX+1];
 
 } creature_t;
 
@@ -46,6 +46,7 @@ typedef struct evolve_parms_s
 	int		popRows;				// Population Rows
 	int		popCols;				// Population Columns
 	int		envChangeRate;			// Environment changes every X generations
+	int		historySpecies;			// Max number of history species
 
 } evolve_parms_t;
 

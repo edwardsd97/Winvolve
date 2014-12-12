@@ -18,11 +18,19 @@ HPEN hBrightPen = 0;
 BSTR unicodestr = SysAllocStringLen(NULL, 1024);
 COLORREF bkColor = RGB(32, 32, 32);
 
+HDC hdcMem;
+RECT hdcMemRect;
+HBITMAP hbmMem;
+HBITMAP hbmOld;
+
+const char *SAVE_NAME = "winvolve.sav";
+const int SAVE_VER = 1;
+
 extern int g_Refresh;
 extern int g_Stats;
 extern evolve_state_t g_EvolveState;
 
-const int RIGHT_PANEL_SIZE = 230;
+int RIGHT_PANEL_SIZE = 230;
 
 typedef struct parm_slider_s
 {
@@ -69,7 +77,7 @@ parm_slider_t g_parmSliders[10] =
 	{ &g_EvolveParms.ageMature, 0, 19, 0, 0, "Age of Maturity" },
 	{ &g_EvolveParms.rebirthGenerations, 0, 100, 0, 0, "Rebirth Generations" },
 	{ &g_EvolveParms.predationLevel, 0, 1, 1, 0, "Predation Level" },
-	{ &g_EvolveParms.speciesMatch, 0, 1, 1, 0, "Species Mate" },
+	{ &g_EvolveParms.speciesMatch, 0, 1, 1, 0, "Species Match Req" },
 	{ &g_EvolveParms.speciesNew, 1, 50, 0, 0, "Min Species Pop" },
 	{ &g_EvolveParms.envChangeRate, 1, 1000, 0, 0, "Enviro Change Rate" },
 	{ &g_EvolveParms.genes, 1, 32, 0, 1, "Gene Count (*)" },
@@ -104,9 +112,82 @@ void click_asteroid()
 	evolve_asteroid(&g_EvolveState);
 }
 
-button_t g_Buttons[4] =
+void click_save()
+{
+	FILE *f = fopen(SAVE_NAME, "wb");
+
+	if (f)
+	{
+		fseek(f, 0, SEEK_SET);
+		int *start = (int*)(&g_EvolveState);
+		int *write = start;
+		fwrite(&SAVE_VER, sizeof(SAVE_VER), 1, f);
+		while ((write - start) < (sizeof(g_EvolveState) / sizeof(int)))
+		{
+			if (fwrite(write++, sizeof(int), 1, f) != 1)
+			{
+				fclose(f);
+				return;
+			}
+		}
+
+		fclose(f);
+	}
+}
+
+void click_load()
+{
+	FILE *f = fopen(SAVE_NAME, "rb");
+
+	if (f)
+	{
+		fseek(f, 0, SEEK_SET);
+		int *start = (int*)(&g_EvolveState);
+		int *write = start;
+		int saveVer;
+		fread(&saveVer, sizeof(SAVE_VER), 1, f);
+		if (saveVer != SAVE_VER)
+		{
+			fclose(f);
+			return;
+		}
+		while ((write - start) < (sizeof(g_EvolveState) / sizeof(int)))
+		{
+			if (fread(write++, sizeof(int), 1, f) != 1)
+			{
+				fclose(f);
+				return;
+			}
+		}
+		fclose(f);
+
+		memcpy(&g_EvolveParms, &g_EvolveState.parms, sizeof(g_EvolveParms));
+
+		for (int i = 0; i < POP_MAX; i++)
+			g_EvolveState.creatures[i].state = &g_EvolveState;
+		for (int i = 0; i < POP_COLS_MAX; i++)
+			g_EvolveState.environment[i].state = &g_EvolveState;
+		for (int x = 0; x < SPECIES_HIST_ROWS; x++)
+		{
+			for (int y = 0; y < SPECIES_HIST_COLS; y++)
+			{
+				g_EvolveState.record[x][y].creature.state = &g_EvolveState;
+				g_EvolveState.record[x][y].environment.state = &g_EvolveState;
+			}
+		}
+		for (int i = 0; i < 2; i++)
+			g_EvolveState.creatureLastAlive[i].state = &g_EvolveState;
+
+		g_Refresh = 1;
+		return;
+	}
+}
+
+button_t g_Buttons[6] =
 {
 	{ "Defaults (*)",	click_defaults },
+	{ "Save",			click_save },
+	{ "Load",			click_load },
 	{ "Predation",		click_predation },
 	{ "Earthquake",		click_earthquake },
 	{ "Asteroid",		click_asteroid },
@@ -171,10 +252,11 @@ void draw_parm_slider(HDC dc, LPRECT rect, parm_slider_t *slider)
 	HFONT fFontOld = (HFONT)SelectObject(dc, (HGDIOBJ)hFont);
 	HBRUSH hBrushold = (HBRUSH)SelectObject(dc, (HGDIOBJ)hBackBrush);
 	HPEN hPenold;
+	int k = 2;
 
 	memcpy(&slider->frameRect, rect, sizeof(RECT));
 
-	rect->top += 20;
+	rect->top += 20 + k;
 	rect->right = rect->left + RIGHT_PANEL_SIZE - 20;
 	rect->bottom = rect->top + 20;
 
@@ -185,9 +267,8 @@ void draw_parm_slider(HDC dc, LPRECT rect, parm_slider_t *slider)
 	fmax = max((float)slider->min, (float)slider->max);
 	fmin = min((float)slider->min, (float)slider->max);
 	fval = min(fmax, max(fmin, fval));
-	fpct = fval / (max(fmin, fmax) - min(fmin, fmax));
+	fpct = (fval - fmin) / (fmax - fmin);
 
-	int k = 2;
 	RECT clear;
 	memcpy(&clear, rect, sizeof(RECT));
 	clear.left -= k + 1;
@@ -195,7 +276,7 @@ void draw_parm_slider(HDC dc, LPRECT rect, parm_slider_t *slider)
 	clear.right += k + 1;
 	clear.bottom += k + 1;
 	FillRect(dc, &clear, hBackBrush);
-	if (g_Hovering == slider)
+	if (g_Hovering == slider||g_sliderEditing==slider)
 		hPenold = (HPEN)SelectObject(dc, (HGDIOBJ)hBrightPen);
 	else
 		hPenold = (HPEN)SelectObject(dc, (HGDIOBJ)hRiverPen);
@@ -219,7 +300,7 @@ void draw_parm_slider(HDC dc, LPRECT rect, parm_slider_t *slider)
 	}
 	SelectObject(dc,oldObj);
 
-	rect->top -= 20;
+	rect->top -= 20 + k;
 	sprintf(msg, "%s:", slider->title);
 	draw_text(dc, rect, msg, RGB(200, 200, 200));
 	if (slider->type)
@@ -237,12 +318,13 @@ void draw_parm_slider(HDC dc, LPRECT rect, parm_slider_t *slider)
 	SelectObject(dc, (HGDIOBJ)hPenold);
 }
 
-void move_parm_slider(HWND hwnd, parm_slider_t *slider, int x)
+void move_parm_slider(HWND hwnd, HDC dc, parm_slider_t *slider, int x)
 {
 	float fval;
 	float fmin;
 	float fmax;
 	float fpct;
+	RECT fill;
 
 	if (slider->type)
 		fval = *((float*)(slider->data));
@@ -262,15 +344,23 @@ void move_parm_slider(HWND hwnd, parm_slider_t *slider, int x)
 	else
 		*((int*)(slider->data)) = (int) fval;
 
-	HDC dc = GetDC(hwnd);
-	RECT rect;
-	
-	memcpy(&rect, &slider->frameRect, sizeof(RECT));
-	draw_parm_slider(dc, &rect, slider);
+	// Make sure GeneCount, Rows, and Cols will fit in window
+	GetClientRect(hwnd, &fill);
+	int width = fill.right - RIGHT_PANEL_SIZE - 10;
+	if (slider->data == (void*)&g_EvolveParms.genes)
+		g_EvolveParms.genes = min(g_EvolveParms.genes, ((width / g_EvolveParms.popCols) - 10) / 10);
+	else if (slider->data == (void*)&g_EvolveParms.popCols)
+		g_EvolveParms.popCols = min(g_EvolveParms.popCols, width / ((g_EvolveParms.genes+1) * 10) );
+
+	g_EvolveParms.historySpecies = min( SPECIES_HIST_ROWS, (fill.bottom - ((g_EvolveParms.popRows + 1) * 20)) / 50);
 
 	evolve_parms_update(&g_EvolveState, &g_EvolveParms);
 
-	ReleaseDC(hwnd, dc);
+	RECT rect;
+	
+	memcpy(&rect, &slider->frameRect, sizeof(RECT));
+
+	draw_parm_slider(dc, &rect, slider);
 }
 
 void draw_creature(HDC dc, LPRECT rect, const creature_t *creature)
@@ -308,7 +398,7 @@ void draw_creature(HDC dc, LPRECT rect, const creature_t *creature)
 	}
 }
 
-void draw(HWND hwnd, int step, int refresh)
+void draw(HWND hwnd, HDC dc, int refresh)
 {
 	int i;
 	int j;
@@ -316,15 +406,11 @@ void draw(HWND hwnd, int step, int refresh)
 	static clock_t lastStats = 0;
 
 	//	PAINTSTRUCT ps;
-	HDC hdc;
 	RECT rect;
 	HFONT hFontold;
 	HBRUSH hBrushold;
 	HPEN hPenold;
 	char msg[100];
-
-	//hdc = BeginPaint(hwnd, &ps);
-	hdc = GetDC(hwnd);
 
 	rect.left = 10;
 	rect.right = 5000;
@@ -342,11 +428,14 @@ void draw(HWND hwnd, int step, int refresh)
 		hBrightPen = CreatePen(PS_SOLID, 2, RGB(128, 128, 192));
 	}
 
-	hFontold = (HFONT)SelectObject(hdc, (HGDIOBJ)hFont);
-	hBrushold = (HBRUSH)SelectObject(hdc, (HGDIOBJ)hBackBrush);
-	hPenold = (HPEN)SelectObject(hdc, (HGDIOBJ)hRiverPen);
+	hFontold = (HFONT)SelectObject(dc, (HGDIOBJ)hFont);
+	hBrushold = (HBRUSH)SelectObject(dc, (HGDIOBJ)hBackBrush);
+	hPenold = (HPEN)SelectObject(dc, (HGDIOBJ)hRiverPen);
 
 	RECT fill;
+	static int lastStep = 0;
+
+	int step = g_EvolveState.step;
 
 	GetClientRect(hwnd, &fill);
 
@@ -358,25 +447,26 @@ void draw(HWND hwnd, int step, int refresh)
 		last_col = g_EvolveState.river_col;
 	}
 
-	if (step == 0 || refresh)
+	if (lastStep > step || refresh)
 	{
+		// Started a new generation
 		if (refresh)
 		{
-			FillRect(hdc, &fill, hBackBrush);
+			FillRect(dc, &fill, hBackBrush);
 
 			if (g_Stats)
 			{
-				MoveToEx(hdc, fill.right - RIGHT_PANEL_SIZE, fill.top, NULL);
-				LineTo(hdc, fill.right - RIGHT_PANEL_SIZE, fill.bottom);
+				MoveToEx(dc, fill.right - RIGHT_PANEL_SIZE, fill.top, NULL);
+				LineTo(dc, fill.right - RIGHT_PANEL_SIZE, fill.bottom);
 
 				rect.left = fill.right - RIGHT_PANEL_SIZE + 10;
 				rect.top = 10;
 				for (i = 0; i < ES_COUNT; i++)
 				{
-					draw_text(hdc, &rect, g_statNames[i], RGB(200, 200, 200));
+					draw_text(dc, &rect, g_statNames[i], RGB(200, 200, 200));
 					rect.top += 20;
 				}
-				draw_text(hdc, &rect, "Predation:", RGB(200, 200, 200));
+				draw_text(dc, &rect, "Predation:", RGB(200, 200, 200));
 			}
 
 			lastStats = 0;
@@ -384,8 +474,14 @@ void draw(HWND hwnd, int step, int refresh)
 			if (g_EvolveState.river_col)
 			{
 				int x = (10 + (g_EvolveState.river_col * (g_EvolveState.parms.genes + 1) * 10)) - 5;
-				MoveToEx(hdc, x, 35, (LPPOINT)NULL);
-				LineTo(hdc, x, 35 + (g_EvolveState.parms.popRows * 20));
+				MoveToEx(dc, x, 35, (LPPOINT)NULL);
+				LineTo(dc, x, 35 + (g_EvolveState.parms.popRows * 20));
+			}
+
+			if (g_Stats)
+			{
+				MoveToEx(dc, fill.left + 5, 20 * g_EvolveState.parms.popRows + 20 + 23, (LPPOINT)NULL);
+				LineTo(dc, fill.right - RIGHT_PANEL_SIZE - 10, 20 * g_EvolveState.parms.popRows + 20 + 23);
 			}
 		}
 
@@ -393,7 +489,7 @@ void draw(HWND hwnd, int step, int refresh)
 		{
 			rect.left = 10 + (i * (g_EvolveState.parms.genes + 1) * 10);
 			rect.top = 10;
-			draw_creature(hdc, &rect, &g_EvolveState.environment[i]);
+			draw_creature(dc, &rect, &g_EvolveState.environment[i]);
 		}
 
 		for (i = 0; i < g_EvolveState.parms.popRows; i++)
@@ -402,16 +498,23 @@ void draw(HWND hwnd, int step, int refresh)
 			{
 				rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
 				rect.top = 35 + (i * 20);
-				draw_creature(hdc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
+				draw_creature(dc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
 			}
 		}
 	}
 
-	i = (step % g_EvolveState.popSize) / g_EvolveState.parms.popCols;
-	j = (step % g_EvolveState.popSize) % g_EvolveState.parms.popCols;
-	rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
-	rect.top = 35 + (i *20);
-	draw_creature(hdc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
+	while (lastStep != step && lastStep < (g_EvolveState.popSize * 2))
+	{
+		int index = g_EvolveState.orderTable[lastStep / 2];
+		i = (index % g_EvolveState.popSize) / g_EvolveState.parms.popCols;
+		j = (index % g_EvolveState.popSize) % g_EvolveState.parms.popCols;
+		rect.left = 10 + (j * (g_EvolveState.parms.genes + 1) * 10);
+		rect.top = 35 + (i * 20);
+		draw_creature(dc, &rect, &g_EvolveState.creatures[(i*g_EvolveState.parms.popCols) + j]);
+		lastStep += 2;
+		if (lastStep > (g_EvolveState.popSize * 2))
+			lastStep = 0;
+	}
 
 	if ( g_Stats && clock() - lastStats > 250)
 	{
@@ -420,7 +523,7 @@ void draw(HWND hwnd, int step, int refresh)
 		{
 			sprintf(msg, "%i", g_EvolveState.stats[i]);
 			rect.left = (fill.right - 10) - strlen(msg) * 10;
-			draw_text(hdc, &rect, msg, RGB(200, 200, 200));
+			draw_text(dc, &rect, msg, RGB(200, 200, 200));
 			rect.top += 20;
 		}
 
@@ -429,7 +532,7 @@ void draw(HWND hwnd, int step, int refresh)
 		{
 			sprintf(msg, " ON");
 			rect.left = (fill.right - 10) - 3 * 10;
-			draw_text(hdc, &rect, msg, RGB(255, 200, 200));
+			draw_text(dc, &rect, msg, RGB(255, 200, 200));
 			if (!lastPredation)
 				g_Refresh = 1;
 		}
@@ -437,7 +540,7 @@ void draw(HWND hwnd, int step, int refresh)
 		{
 			sprintf(msg, "OFF");
 			rect.left = (fill.right - 10) - 3 * 10;
-			draw_text(hdc, &rect, msg, RGB(200, 255, 200));
+			draw_text(dc, &rect, msg, RGB(200, 255, 200));
 			if (lastPredation)
 				g_Refresh = 1;
 		}
@@ -449,7 +552,7 @@ void draw(HWND hwnd, int step, int refresh)
 		for (i = 0; i < sizeof(g_parmSliders) / sizeof(parm_slider_t); i++)
 		{
 			rect.left = fill.right - RIGHT_PANEL_SIZE + 10;
-			draw_parm_slider(hdc, &rect, &g_parmSliders[i]);
+			draw_parm_slider(dc, &rect, &g_parmSliders[i]);
 		}
 
 		rect.top += 10;
@@ -458,17 +561,36 @@ void draw(HWND hwnd, int step, int refresh)
 		rect.right = fill.right - 10;
 		for (i = 0; i < sizeof(g_Buttons) / sizeof(button_t); i++)
 		{
-			draw_button(hdc, &rect, &g_Buttons[i]);
-			rect.top += 40;
-			rect.bottom += 40;
+			draw_button(dc, &rect, &g_Buttons[i]);
+			rect.top += 35;
+			rect.bottom += 35;
 		}
 
-		for (i = 0; i < g_EvolveState.parms.popCols; i++)
+		for (i = 0; i < g_EvolveState.parms.historySpecies; i++)
 		{
+			if (!refresh)
+			{ 
+				bool anyAlive = false;
+				for (j = 0; j < g_EvolveState.parms.popCols; j++)
+				{
+					if (g_EvolveState.record[i][0].creature.age == 0)
+					{
+						anyAlive = true;
+						break;
+					}
+				}
+				if ( !anyAlive )
+					continue;
+			}
+
 			fill.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i);
 			fill.bottom = fill.top + 45;
 			fill.right -= RIGHT_PANEL_SIZE + 1;
-			FillRect(hdc, &fill, hBackBrush);
+			FillRect(dc, &fill, hBackBrush);
+
+			rect.left = 5;
+			rect.top = 20 * g_EvolveState.parms.popRows + 20 + 25;
+			draw_text(dc, &rect, "Species History:", RGB(200, 200, 200));
 
 			if (!g_EvolveState.record[i][0].creature.genes[0])
 				continue;
@@ -486,45 +608,51 @@ void draw(HWND hwnd, int step, int refresh)
 				rect.left = 5 + (j * width);
 				rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i);
 				g_EvolveState.record[i][j].environment.age = g_EvolveState.record[i][j].creature.age + 1;
-				draw_creature(hdc, &rect, &g_EvolveState.record[i][j].environment);
+				draw_creature(dc, &rect, &g_EvolveState.record[i][j].environment);
 				rect.left = 5 + (j * width);
 				rect.top += 20;
-				draw_creature(hdc, &rect, &g_EvolveState.record[i][j].creature);
+				draw_creature(dc, &rect, &g_EvolveState.record[i][j].creature);
 			}
 
 			rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i) + 10;
 			rect.left = 5 + (j * width);
 			sprintf(msg, "%i", (oldest - g_EvolveState.record[i][0].generation) + 1);
 			if (g_EvolveState.record[i][0].creature.age == 0)
-				draw_text(hdc, &rect, msg, RGB(200, 200, 200));
+				draw_text(dc, &rect, msg, RGB(200, 200, 200));
 			else
-				draw_text(hdc, &rect, msg, RGB(128, 128, 128));
+				draw_text(dc, &rect, msg, RGB(128, 128, 128));
 		}
 
 		lastStats = clock();
 	}
 
-	SelectObject(hdc, hFontold);
-	SelectObject(hdc, hBrushold);
-	SelectObject(hdc, hPenold);
-
-	ReleaseDC(hwnd, hdc);
-
-//	EndPaint(hwnd, &ps);
+	lastStep = step & ~1; // always rounded down to even number
+	SelectObject(dc, hFontold);
+	SelectObject(dc, hBrushold);
+	SelectObject(dc, hPenold);
 }
 
 void evolve_win_tick()
 {
 	if (!initialized)
 	{
-		evolve_parms_default(&g_EvolveParms);
+		g_EvolveState.stats[ES_GENERATIONS] = 0;
 
-		evolve_init(&g_EvolveState, &g_EvolveParms);
+		click_load();
+
+		if ( g_EvolveState.stats[ES_GENERATIONS] == 0 )
+		{
+			evolve_parms_default(&g_EvolveParms);
+			evolve_init(&g_EvolveState, &g_EvolveParms);
+		}
 
 		initialized = true;
 	}
 
+	int extinctions = g_EvolveState.stats[ES_EXTINCTIONS];
 	evolve_simulate(&g_EvolveState);
+	if (extinctions != g_EvolveState.stats[ES_EXTINCTIONS])
+		g_Refresh = 1;
 }
 
 void evolve_win_draw(HWND hwnd)
@@ -535,16 +663,42 @@ void evolve_win_draw(HWND hwnd)
 	int refresh = g_Refresh;
 	g_Refresh = 0;
 
-	int drawStep = g_EvolveState.step - 1;
-	if (drawStep < 0)
-		drawStep = (g_EvolveState.popSize * 2) - 1;
-	draw(hwnd, drawStep, refresh);
+	// Avoid flickering by drawing to offscreen HDC then BitBlt to window dc
+	HDC dc = GetDC(hwnd);
+	RECT clRect;
+	GetClientRect(hwnd, &clRect);
+	if (clRect.right != hdcMemRect.right || clRect.bottom != hdcMemRect.bottom)
+	{
+		if (hbmOld)
+			SelectObject(hdcMem, hbmOld);
+		if (hbmMem)
+			DeleteObject(hbmMem);
+		if (hdcMem)
+			DeleteDC(hdcMem);
+
+		hdcMem = CreateCompatibleDC(dc);
+		hbmMem = CreateCompatibleBitmap(dc, clRect.right - clRect.left, clRect.bottom - clRect.top);
+		hbmOld = (HBITMAP)SelectObject(hdcMem, hbmMem);
+
+		BitBlt(hdcMem, clRect.left, clRect.top, clRect.right - clRect.left, clRect.bottom - clRect.top, dc, 0, 0, SRCCOPY);
+
+		memcpy(&hdcMemRect, &clRect, sizeof(clRect));
+	}
+
+	draw(hwnd, hdcMem, refresh);
+
+	BitBlt(dc, clRect.left, clRect.top, clRect.right - clRect.left, clRect.bottom - clRect.top, hdcMem, 0, 0, SRCCOPY);
+
+	ReleaseDC(hwnd, dc);
 }
 
-void evolve_win_mouse_move(HWND hwnd, int x, int y)
+void evolve_win_mouse_move(HWND hwnd, HDC dc, int x, int y)
 {
+	if (!g_Stats)
+		return;
+
 	if (g_sliderEditing)
-		move_parm_slider(hwnd, g_sliderEditing, x);
+		move_parm_slider(hwnd, dc, g_sliderEditing, x);
 
 	g_Hovering = NULL;
 
@@ -554,11 +708,9 @@ void evolve_win_mouse_move(HWND hwnd, int x, int y)
 			g_parmSliders[i].scrRect.top <= y && g_parmSliders[i].scrRect.bottom >= y)
 		{
 			g_Hovering = &g_parmSliders[i];
-			HDC dc = GetDC(hwnd);
 			RECT r;
 			memcpy(&r, &g_parmSliders[i].frameRect, sizeof(RECT));
 			draw_parm_slider(dc, &r, &g_parmSliders[i]);
-			ReleaseDC(hwnd, dc);
 		}
 	}
 
@@ -568,15 +720,16 @@ void evolve_win_mouse_move(HWND hwnd, int x, int y)
 			g_Buttons[i].frameRect.top <= y && g_Buttons[i].frameRect.bottom >= y)
 		{
 			g_Hovering = &g_Buttons[i];
-			HDC dc = GetDC(hwnd);
 			draw_button(dc, &g_Buttons[i].frameRect, &g_Buttons[i]);
-			ReleaseDC(hwnd, dc);
 		}
 	}
 }
 
-void evolve_win_mouse_down(HWND hwnd, int x, int y)
+void evolve_win_mouse_down(HWND hwnd, HDC dc, int x, int y)
 {
+	if (!g_Stats)
+		return;
+
 	for (int i = 0; i < sizeof(g_parmSliders) / sizeof(parm_slider_t); i++)
 	{
 		if (g_parmSliders[i].scrRect.left <= x && g_parmSliders[i].scrRect.right >= x &&
@@ -593,35 +746,35 @@ void evolve_win_mouse_down(HWND hwnd, int x, int y)
 			g_Buttons[i].frameRect.top <= y && g_Buttons[i].frameRect.bottom >= y)
 		{
 			g_buttonClicking = &g_Buttons[i];
-			HDC dc = GetDC(hwnd);
 			draw_button(dc, &g_buttonClicking->frameRect, g_buttonClicking);
-			ReleaseDC(hwnd, dc);
 			break;
 		}
 	}
 }
 
-void evolve_win_mouse_up(HWND hwnd, int x, int y)
+void evolve_win_mouse_up(HWND hwnd, HDC dc, int x, int y)
 {
+	if (!g_Stats)
+		return;
+
 	if (g_sliderEditing)
 	{
-		HDC dc = GetDC(hwnd);
 		draw_parm_slider(dc, &g_sliderEditing->frameRect, g_sliderEditing);
-		ReleaseDC(hwnd, dc);
 
-		if (g_sliderEditing->fullRefresh )
+		if (g_sliderEditing->fullRefresh)
+		{
 			evolve_init(&g_EvolveState, &g_EvolveParms);
+			g_Refresh = 1;
+		}
 	}
 
 	g_sliderEditing = NULL;
 
 	if (g_buttonClicking)
 	{
-		HDC dc = GetDC(hwnd);
 		button_t *drawButton = g_buttonClicking;
 		g_buttonClicking = NULL;
 		draw_button(dc, &drawButton->frameRect, drawButton);
-		ReleaseDC(hwnd, dc);
 
 		if (drawButton->frameRect.left <= x && drawButton->frameRect.right >= x &&
 			drawButton->frameRect.top <= y && drawButton->frameRect.bottom >= y)
