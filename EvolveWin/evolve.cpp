@@ -652,7 +652,7 @@ void current_population( evolve_state_t *state )
 		}
 	}
 
-	state->stats[ES_SPECIES_MAX] = max(state->stats[ES_SPECIES_MAX], state->stats[ES_SPECIES_EVER]);
+	state->stats[ES_SPECIES_MAX] = max(state->stats[ES_SPECIES_MAX], state->stats[ES_SPECIES_NOW]);
 }
 
 void evolve_rebirth(evolve_state_t *state,bool randomizeEnvironment)
