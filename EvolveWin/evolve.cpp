@@ -15,7 +15,7 @@
 
 #define max(a,b)		(((a) > (b)) ? (a) : (b))
 #define min(a,b)		(((a) < (b)) ? (a) : (b))
-#define clamp(a,b,c)    ( min( max(a, b), c ) )
+#define clamp(a,b,c)    ( min( max((a), (b)), (c) ) )
 
 float randf()
 {
@@ -26,10 +26,11 @@ typedef float(*score_func)(creature_t *creatureA, creature_t *creatureB);
 
 char random_letter(evolve_state_t *state, bool lowerOnly = false)
 {
-	int size = state->alphabet_size;
+	int index = rand() % state->alphabet_size;
+	char result = state->parms.alphabet[index];
 	if (lowerOnly)
-		size = size / 2;
-	return state->parms.alphabet[rand() % size];
+		return LOWER(result);
+	return rand() % 2 ? LOWER(result) : UPPER(result);
 }
 
 void randomize_order(evolve_state_t *state )
@@ -43,12 +44,12 @@ void randomize_order(evolve_state_t *state )
 	}
 }
 
-char alphabet_index(evolve_state_t *state, char c)
+char evolve_alphabet_index(evolve_state_t *state, char c)
 {
 	int i;
 	for (i = 0; i < state->alphabet_size; i++)
 	{
-		if (c == state->parms.alphabet[i])
+		if (LOWER(c) == LOWER(state->parms.alphabet[i]))
 			return i;
 	}
 
@@ -77,10 +78,8 @@ creature_t *creature_environment(creature_t *creature)
 
 int letter_delta(evolve_state_t *state,char A, char B)
 {
-	if (A < 'a')
-		A += 'a' - 'A';
-	if (B < 'a')
-		B += 'a' - 'A';
+	A = LOWER(A);
+	B = LOWER(B);
 
 	if (A == B)
 		return 0;
@@ -89,7 +88,7 @@ int letter_delta(evolve_state_t *state,char A, char B)
 	int smaller = min(A, B);
 
 	int result1 = bigger - smaller;
-	int result2 = 1 + (smaller - state->parms.alphabet[0]) + (state->parms.alphabet[(state->alphabet_size / 2) - 1]) - bigger;
+	int result2 = 1 + (smaller - state->parms.alphabet[0]) + (state->parms.alphabet[state->alphabet_size - 1]) - bigger;
 
 	return min(result1, result2) * 2;
 }
@@ -97,7 +96,7 @@ int letter_delta(evolve_state_t *state,char A, char B)
 float matches_letter(evolve_state_t *state, char A, char B)
 {
 	float diff = fabs((float)letter_delta(state,A, B));
-	float range = (float(state->alphabet_size) / 2.0f);
+	float range = float(state->alphabet_size);
 
 	return clamp(1.0f - (diff / range), 0.0f, 1.0f);
 }
@@ -208,14 +207,21 @@ float score_mate(creature_t *creatureA, creature_t *creatureB)
 		return -1;
 
 	float score = 0;
+	float perGeneFactor = (1.0f / (float)(state->parms.genes * 2));
+
+	if (state->rebirth)
+		perGeneFactor = 1.0f / (float)(state->parms.genes);
 
 	for (int i = 0; i < state->parms.genes; i++)
 	{
 		// Prefer those that match my colors the most
-		score += matches_letter(state, creatureA->genes[i], creatureB->genes[i]) * (1.0f / (float)(state->parms.genes * 2));
+		score += matches_letter(state, creatureA->genes[i], creatureB->genes[i]) * perGeneFactor;
 
-		// Prefer those that stand out against the environment
-		score += (1.0f - matches_letter(state, creatureB->genes[i], creature_environment(creatureB)->genes[i])) * (1.0f / (float)(state->parms.genes * 2));
+		if (!state->rebirth)
+		{
+			// Prefer those that stand out against the environment
+			score += (1.0f - matches_letter(state, creatureB->genes[i], creature_environment(creatureB)->genes[i])) * perGeneFactor;
+		}
 	}
 
 	return score;
@@ -257,20 +263,20 @@ void mutate(creature_t *creature)
 	if (rand() % 2)
 	{
 		// Change case but keep letter
-		if (creature->genes[gene] > 'Z')
-			creature->genes[gene] = creature->genes[gene] - ('a' - 'A');
+		if ( IS_LOWER(creature->genes[gene]) )
+			creature->genes[gene] = UPPER(creature->genes[gene]);
 		else
-			creature->genes[gene] = creature->genes[gene] + ('a' - 'A');
+			creature->genes[gene] = LOWER(creature->genes[gene]);
 	}
 	else
 	{
 		// Change letter but keep case
-		int index = alphabet_index(state, creature->genes[gene]);
+		int index = evolve_alphabet_index(state, creature->genes[gene]);
 		index += rand() % 2 ? 1 : -1;
-		if (creature->genes[gene] > 'Z')
-			index = clamp(index, 0, (state->alphabet_size / 2) - 1);
-		else
-			index = clamp(index, state->alphabet_size / 2, state->alphabet_size - 1);
+		if (index < 0)
+			index = state->alphabet_size - 1;
+		else if (index >= state->alphabet_size)
+			index = 0;
 		creature->genes[gene] = state->parms.alphabet[index];
 	}
 }
@@ -705,17 +711,17 @@ void evolve_parms_default(evolve_parms_t *parms)
 {
 	parms->ageDeath				= 5;
 	parms->ageMature			= 2;
-	parms->rebirthGenerations	= 10;
-	parms->predationLevel		= 0.50f;
+	parms->rebirthGenerations	= 15;
+	parms->predationLevel		= 0.75f;
 	parms->procreationLevel		= 1.0f;
 	parms->speciesMatch			= 0.5f;
 	parms->speciesNew			= 6;
-	parms->popRows				= 22;
+	parms->popRows				= 21;
 	parms->popCols				= 8;
 	parms->envChangeRate		= 100;
 	parms->historySpecies		= 8;
 
-	strcpy(parms->alphabet, "abcdefghABCDEFGH");
+	strcpy(parms->alphabet, "abcdefgh");
 	parms->genes = 8;
 }
 
@@ -740,7 +746,7 @@ void evolve_parms_update(evolve_state_t *state, evolve_parms_t *parms)
 	// cannot be updated without full re-init
 	// state->parms->popRows = 22;
 	// state->parms->popCols = 8;
-	// state->strcpy(parms->alphabet, "abcdefghABCDEFGH");
+	// state->strcpy(parms->alphabet, "abcdefgh");
 	// state->parms->genes = 8;
 }
 
@@ -767,6 +773,7 @@ bool evolve_init(evolve_state_t *state, evolve_parms_t *parms)
 	state->stats[ES_GENERATIONS] = 1;
 	state->predation = state->parms.predationLevel;
 	state->alphabet_size = strlen(state->parms.alphabet);
+	strlwr(state->parms.alphabet);
 	state->popSize = state->parms.popRows * state->parms.popCols;
 
 	srand((unsigned)time(NULL));

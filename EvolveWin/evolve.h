@@ -11,6 +11,11 @@ struct evolve_state_s;
 struct evolve_parms_s;
 struct creature_s;
 
+#define IS_UPPER(c)		((c) < 'a')
+#define IS_LOWER(c)		((c) >= 'a')
+#define UPPER(c)		(IS_LOWER(c) ? (c) - ('a' - 'A') : (c))
+#define LOWER(c)		(IS_UPPER(c) ? (c) + ('a' - 'A') : (c))
+
 typedef struct creature_s
 {
 	evolve_state_s *state;
@@ -88,6 +93,7 @@ typedef struct evolve_state_s
 bool	evolve_init(evolve_state_t *state, evolve_parms_t *parms = NULL);
 void	evolve_parms_update(evolve_state_t *state, evolve_parms_t *parms);
 void	evolve_simulate(evolve_state_t *state);
+char	evolve_alphabet_index(evolve_state_t *state, char c);
 
 void	evolve_parms_default(evolve_parms_t *parms);
 void	evolve_asteroid(evolve_state_t *state);

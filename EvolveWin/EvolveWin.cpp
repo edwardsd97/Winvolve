@@ -132,26 +132,28 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 void resize(HWND hWnd = NULL)
 {
 	RECT window;
+	int cW;
+	int cH;
 
 	if (hWnd == NULL)
 		hWnd = g_hWnd;
 
 	GetWindowRect(hWnd, &window);
 
-	int standardW = 980;
-	int standardH = 950;
+	int panelH = 950;
+
+	cH = ((g_EvolveState.parms.popRows + 2) * 20) + 15;
+	cW = ((g_EvolveState.parms.popCols * (g_EvolveState.parms.genes + 1)) * 10) + 25;
 
 	if (g_Stats)
 	{
-		window.right = window.left + standardW;
-		window.bottom = window.top + standardH;
+		window.bottom = window.top + panelH;
+		window.right = window.left + cW + RIGHT_PANEL_SIZE;
 	}
 	else
 	{
-		window.right = window.left + (standardW - RIGHT_PANEL_SIZE);
-		int standardNeeded = ((22 + 1) * 20) + 10;
-		int needed = ((g_EvolveState.parms.popRows + 1) * 20) + 10;
-		window.bottom = (window.top + standardH) - 410 + ((standardH - standardNeeded) - (standardH - needed));
+		window.bottom = window.top + cH + 50;
+		window.right = window.left + cW;
 	}
 
 	MoveWindow(hWnd, window.left, window.top, window.right - window.left, window.bottom - window.top, true);
@@ -174,7 +176,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    int dwStyle = (WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX);
 
    g_hWnd = CreateWindow(szWindowClass, szTitle, dwStyle,
-      CW_USEDEFAULT, 0, 980, 950, NULL, NULL, hInstance, NULL);
+      CW_USEDEFAULT, 0, 950, 950, NULL, NULL, hInstance, NULL);
 
    if (!g_hWnd)
    {

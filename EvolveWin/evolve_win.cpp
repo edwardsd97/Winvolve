@@ -5,6 +5,7 @@
 #include <OleAuto.h>
 #include <time.h>
 #include <stdio.h>
+#include <math.h>
 
 #pragma warning(disable:4996) // This function or variable may be unsafe.
 
@@ -29,6 +30,8 @@ const int SAVE_VER = 3;
 extern int g_Refresh;
 extern int g_Stats;
 extern evolve_state_t g_EvolveState;
+
+COLORREF g_Colors[256];
 
 void resize(HWND hWnd = NULL);
 
@@ -91,10 +94,52 @@ parm_slider_t g_parmSliders[11] =
 
 };
 
+COLORREF color_lerp(COLORREF a, COLORREF b, float lerp, float alpha)
+{
+	COLORREF clr;
+
+	int ar = (a & 0xFF);
+	int ag = ((a & 0xFF00) >> 8);
+	int ab = ((a & 0xFF0000) >> 16);
+
+	int br = (b & 0xFF);
+	int bg = ((b & 0xFF00) >> 8);
+	int bb = ((b & 0xFF0000) >> 16);
+
+	int rc = (int)(float(ar + ((br - ar) * lerp)));
+	int gc = (int)(float(ag + ((bg - ag) * lerp)));
+	int bc = (int)(float(ab + ((bb - ab) * lerp)));
+
+	clr = RGB(rc, gc, bc);
+
+	return clr;
+}
+
+void build_color_table()
+{
+	static COLORREF color[4] =
+	{
+		RGB(255, 128, 128),
+		RGB(128, 255, 128),
+		RGB(128, 128, 255),
+		RGB(255, 128, 128),
+	};
+
+	for (int i = 0; i < g_EvolveState.alphabet_size; i++)
+	{
+		float colorIdx = (float)i;
+		float maxIdx = (float)(g_EvolveState.alphabet_size);
+		float colorFloat = (colorIdx / maxIdx) * ((sizeof(color) / sizeof(color[0]) - 1));
+		COLORREF clr = color_lerp(color[int(colorFloat)], color[int(colorFloat) + 1], colorFloat - floor(colorFloat), 1.0f);
+		g_Colors[LOWER(g_EvolveState.parms.alphabet[i])] = clr;
+	}
+}
+
 void click_defaults()
 {
 	evolve_parms_default(&g_EvolveParms);
 	evolve_init(&g_EvolveState, &g_EvolveParms);
+	build_color_table();
 }
 
 void click_predation()
@@ -349,14 +394,7 @@ void move_parm_slider(HWND hwnd, HDC dc, parm_slider_t *slider, int x)
 	else
 		*((int*)(slider->data)) = (int) fval;
 
-	// Make sure GeneCount, Rows, and Cols will fit in window
 	GetClientRect(hwnd, &fill);
-	int width = fill.right - RIGHT_PANEL_SIZE - 10;
-	if (slider->data == (void*)&g_EvolveParms.genes)
-		g_EvolveParms.genes = min(g_EvolveParms.genes, ((width / g_EvolveParms.popCols) - 10) / 10);
-	else if (slider->data == (void*)&g_EvolveParms.popCols)
-		g_EvolveParms.popCols = min(g_EvolveParms.popCols, width / ((g_EvolveParms.genes+1) * 10) );
-
 	g_EvolveParms.historySpecies = min( SPECIES_HIST_ROWS, (fill.bottom - ((g_EvolveParms.popRows + 1) * 20)) / 50);
 
 	evolve_parms_update(&g_EvolveState, &g_EvolveParms);
@@ -366,22 +404,13 @@ void move_parm_slider(HWND hwnd, HDC dc, parm_slider_t *slider, int x)
 	memcpy(&rect, &slider->frameRect, sizeof(RECT));
 
 	draw_parm_slider(dc, &rect, slider);
+
+	build_color_table();
 }
 
 void draw_creature(HDC dc, LPRECT rect, const creature_t *creature)
 {
 	static char letter[2] = { 0, 0 };
-	static COLORREF color[8] =  
-	{
-		RGB(200, 0, 150), 
-		RGB(255, 100,64),
-		RGB(128, 150, 0), 
-		RGB(96, 200, 0),
-		RGB(0, 200, 96), 
-		RGB(0, 150, 128),
-		RGB(64, 100, 255),
-		RGB(150, 0, 200), 
-	};
 
 	SetBkColor(dc, bkColor);
 
@@ -391,12 +420,9 @@ void draw_creature(HDC dc, LPRECT rect, const creature_t *creature)
 		if (creature->genes[i] == 0)
 			letter[0] = ' ';
 		::MultiByteToWideChar(CP_ACP, 0, letter, -1, unicodestr, GENES_MAX);
-		int colorIdx = letter[0] - 'a';
-		if (letter[0] <= 'Z')
-			colorIdx = letter[0] - 'A';
-		COLORREF clr = color[colorIdx];
-		float fade = 0.2f + ((1.0f - (float(creature->age) / float(g_EvolveState.parms.ageDeath))) * 0.8f);
-		clr = RGB(fade * (clr & 0xFF), fade * ((clr & 0xFF00) >> 8), fade * ((clr & 0xFF0000) >> 16));
+		float alpha = 0.2f + ((1.0f - (float(creature->age) / float(g_EvolveState.parms.ageDeath))) * 0.8f);
+		COLORREF clrBase = g_Colors[LOWER(letter[0])];
+		COLORREF clr = RGB(alpha * (clrBase & 0xFF), alpha * ((clrBase & 0xFF00) >> 8), alpha * ((clrBase & 0xFF0000) >> 16));
 		SetTextColor(dc, clr);
 		DrawText(dc, unicodestr, -1, rect, 0);
 		rect->left += 10;
@@ -588,6 +614,7 @@ void draw(HWND hwnd, HDC dc, int refresh)
 					continue;
 			}
 
+			int clientW = fill.right;
 			fill.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i);
 			fill.bottom = fill.top + 45;
 			fill.right -= RIGHT_PANEL_SIZE + 1;
@@ -595,7 +622,8 @@ void draw(HWND hwnd, HDC dc, int refresh)
 
 			rect.left = 5;
 			rect.top = 20 * g_EvolveState.parms.popRows + 20 + 25;
-			draw_text(dc, &rect, "Species History:", RGB(200, 200, 200));
+			if (clientW - RIGHT_PANEL_SIZE > (17 * 10))
+				draw_text(dc, &rect, "Species History:", RGB(200, 200, 200));
 
 			if (!g_EvolveState.record[i][0].creature.genes[0])
 				continue;
@@ -621,11 +649,14 @@ void draw(HWND hwnd, HDC dc, int refresh)
 
 			rect.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i) + 10;
 			rect.left = 5 + (j * width);
-			sprintf(msg, "%i", (oldest - g_EvolveState.record[i][0].generation) + 1);
-			if (g_EvolveState.record[i][0].creature.age == 0)
-				draw_text(dc, &rect, msg, RGB(200, 200, 200));
-			else
-				draw_text(dc, &rect, msg, RGB(128, 128, 128));
+			if (clientW - RIGHT_PANEL_SIZE > (17 * 10))
+			{
+				sprintf(msg, "%i", (oldest - g_EvolveState.record[i][0].generation) + 1);
+				if (g_EvolveState.record[i][0].creature.age == 0)
+					draw_text(dc, &rect, msg, RGB(200, 200, 200));
+				else
+					draw_text(dc, &rect, msg, RGB(128, 128, 128));
+			}
 		}
 
 		lastStats = clock();
@@ -654,6 +685,8 @@ void evolve_win_tick()
 		initialized = true;
 
 		resize();
+
+		build_color_table();
 	}
 
 	int extinctions = g_EvolveState.stats[ES_EXTINCTIONS];
@@ -776,6 +809,9 @@ void evolve_win_mouse_up(HWND hwnd, HDC dc, int x, int y)
 				g_Refresh = 1;
 			}
 		}
+
+		build_color_table();
+		resize();
 	}
 
 	g_sliderEditing = NULL;
