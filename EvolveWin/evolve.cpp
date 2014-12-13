@@ -715,7 +715,7 @@ void evolve_parms_default(evolve_parms_t *parms)
 	parms->ageDeath				= 5;
 	parms->ageMature			= 2;
 	parms->rebirthGenerations	= 15;
-	parms->predationLevel		= 0.55f;
+	parms->predationLevel		= 0.58f;
 	parms->procreationLevel		= 1.0f;
 	parms->speciesMatch			= 0.5f;
 	parms->speciesNew			= 6;

@@ -71,10 +71,13 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_EVOLVEWIN));
 
 	clock_t nextTick = clock() + 1;
-	
+	WINDOWPLACEMENT p;
+
 	// Main message loop:
 	while (!g_Quit)
 	{
+		GetWindowPlacement(g_hWnd, &p);
+
 		if (clock() >= nextTick)
 		{
 			// Clamp to a maximum generations per second
@@ -87,7 +90,10 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 				evolve_win_draw(g_hWnd);
 
 			clock_t end = clock();
-			nextTick = clock() + max(1, int(ceil((1000.0f / float(generationsPerSecond)) / float(g_EvolveState.popSize*2))) - (end - start));
+			if ((p.showCmd == SW_SHOWMINIMIZED) || (g_Stats == 2))
+				nextTick = 0;
+			else
+				nextTick = clock() + max(1, int(ceil((1000.0f / float(generationsPerSecond)) / float(g_EvolveState.popSize * 2))) - (end - start));
 		}
 
 		if (PeekMessage(&msg, NULL, 0, 0, 1))
@@ -145,10 +151,15 @@ void resize(HWND hWnd = NULL)
 	cH = ((g_EvolveState.parms.popRows + 2) * 20) + 15;
 	cW = ((g_EvolveState.parms.popCols * (g_EvolveState.parms.genes + 1)) * 10) + 25;
 
-	if (g_Stats)
+	if ( g_Stats == 1)
 	{
 		window.bottom = window.top + panelH;
 		window.right = window.left + cW + RIGHT_PANEL_SIZE + 5;
+	}
+	else if (g_Stats == 2)
+	{
+		window.bottom = window.top + (ES_COUNT * 20) + 80;
+		window.right = window.left + RIGHT_PANEL_SIZE;
 	}
 	else
 	{
@@ -257,7 +268,9 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			g_Refresh = 1;
 			break;
 		case IDM_STATS:
-			g_Stats = !g_Stats;
+			g_Stats++;
+			if ( g_Stats > 2 )
+				g_Stats = 0;
 			resize(hWnd);
 			g_Refresh = 1;
 			break;

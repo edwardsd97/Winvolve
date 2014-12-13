@@ -5,6 +5,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <math.h>
+#include <OleAuto.h>
 #include "evolve_wid.h"
 
 bool initialized = false;
@@ -176,7 +177,29 @@ button_t g_Buttons[6] =
 	{ "Asteroid",		click_asteroid },
 };
 
-void draw(HWND hwnd, HDC dc, int refresh)
+void draw_stats(HDC dc, bool titles, bool values, LPRECT rect )
+{
+	char msg[64];
+
+	for ( int i = 0; i < ES_COUNT; i++)
+	{
+		if ( titles )
+			draw_text(dc, rect, g_statNames[i], RGB(200, 200, 200));
+
+		if ( values )
+		{
+			sprintf(msg, "%i", g_EvolveState.stats[i]);
+			int old = rect->left;
+			rect->left = rect->right - (strlen(msg) * 10);
+			draw_text(dc, rect, msg, RGB(200, 200, 200));
+			rect->left = old;
+		}
+
+		rect->top += 20;
+	}
+}
+
+bool draw(HWND hwnd, HDC dc, int refresh)
 {
 	int i;
 	int j;
@@ -218,6 +241,34 @@ void draw(HWND hwnd, HDC dc, int refresh)
 	GetClientRect(hwnd, &fill);
 	int clientW = fill.right;
 
+	if (g_Stats == 2)
+	{
+		bool drewSomething = false;
+		static int lastGen = 0;
+
+		if (lastGen != g_EvolveState.stats[ES_GENERATIONS])
+		{
+			// Just stats
+			FillRect(dc, &fill, hBackBrush);
+
+			fill.top += 10;
+			fill.left += 10;
+			fill.right -= 10;
+
+			draw_stats(dc, true, true, &fill);
+
+			lastGen = g_EvolveState.stats[ES_GENERATIONS];
+
+			drewSomething = true;
+		}
+
+		SelectObject(dc, hFontold);
+		SelectObject(dc, hBrushold);
+		SelectObject(dc, hPenold);
+
+		return drewSomething;
+	}
+
 	static int last_col;
 
 	if (last_col != g_EvolveState.river_col)
@@ -239,12 +290,12 @@ void draw(HWND hwnd, HDC dc, int refresh)
 				LineTo(dc, fill.right - RIGHT_PANEL_SIZE, fill.bottom);
 
 				rect.left = fill.right - RIGHT_PANEL_SIZE + 10;
+				rect.right = fill.right - 10;
 				rect.top = 10;
-				for (i = 0; i < ES_COUNT; i++)
-				{
-					draw_text(dc, &rect, g_statNames[i], RGB(200, 200, 200));
-					rect.top += 20;
-				}
+				rect.bottom = 1000;
+
+				draw_stats(dc, true, false, &rect);
+
 				draw_text(dc, &rect, "Predation Status:", RGB(200, 200, 200));
 			}
 
@@ -300,14 +351,12 @@ void draw(HWND hwnd, HDC dc, int refresh)
 
 	if ( g_Stats && clock() - lastStats > 250)
 	{
+		rect.left = fill.right - RIGHT_PANEL_SIZE + 10;
+		rect.right = fill.right - 10;
 		rect.top = 10;
-		for (i = 0; i < ES_COUNT; i++)
-		{
-			sprintf(msg, "%i", g_EvolveState.stats[i]);
-			rect.left = (fill.right - 10) - strlen(msg) * 10;
-			draw_text(dc, &rect, msg, RGB(200, 200, 200));
-			rect.top += 20;
-		}
+		rect.bottom = 1000;
+
+		draw_stats(dc, false, true, &rect);
 
 		static int lastPredation;
 		if (g_EvolveState.predation > 0.0f && g_EvolveState.rebirth <= 0)
@@ -415,6 +464,8 @@ void draw(HWND hwnd, HDC dc, int refresh)
 	SelectObject(dc, hFontold);
 	SelectObject(dc, hBrushold);
 	SelectObject(dc, hPenold);
+
+	return true;
 }
 
 void evolve_win_tick()
@@ -449,6 +500,17 @@ void evolve_win_draw(HWND hwnd)
 	if (!initialized)
 		return;
 
+	char title[256];
+	BSTR unicodestr = SysAllocStringLen(NULL, 512);
+	sprintf(title, "Winvolve [G: %i SE: %i ME: %i]", g_EvolveState.stats[ES_GENERATIONS], g_EvolveState.stats[ES_SPECIES_EVER], g_EvolveState.stats[ES_EXTINCTIONS_MASS]);
+	::MultiByteToWideChar(CP_ACP, 0, title, -1, unicodestr, 512);
+	SetWindowText(hwnd, unicodestr);
+
+	WINDOWPLACEMENT p;
+	GetWindowPlacement(hwnd, &p);
+	if (p.showCmd == SW_SHOWMINIMIZED)
+		return;
+
 	int refresh = g_Refresh;
 	g_Refresh = 0;
 
@@ -474,16 +536,15 @@ void evolve_win_draw(HWND hwnd)
 		memcpy(&hdcMemRect, &clRect, sizeof(clRect));
 	}
 
-	draw(hwnd, hdcMem, refresh);
-
-	BitBlt(dc, clRect.left, clRect.top, clRect.right - clRect.left, clRect.bottom - clRect.top, hdcMem, 0, 0, SRCCOPY);
+	if ( draw(hwnd, hdcMem, refresh) || refresh )
+		BitBlt(dc, clRect.left, clRect.top, clRect.right - clRect.left, clRect.bottom - clRect.top, hdcMem, 0, 0, SRCCOPY);
 
 	ReleaseDC(hwnd, dc);
 }
 
 void evolve_win_mouse_move(HWND hwnd, HDC dc, int x, int y)
 {
-	if (!g_Stats)
+	if (g_Stats != 1)
 		return;
 
 	if (g_Hovering)
@@ -522,7 +583,7 @@ void evolve_win_mouse_move(HWND hwnd, HDC dc, int x, int y)
 
 void evolve_win_mouse_down(HWND hwnd, HDC dc, int x, int y)
 {
-	if (!g_Stats)
+	if (g_Stats != 1)
 		return;
 
 	for (int i = 0; i < sizeof(g_parmSliders) / sizeof(parm_slider_t); i++)
@@ -551,7 +612,7 @@ void evolve_win_mouse_down(HWND hwnd, HDC dc, int x, int y)
 
 void evolve_win_mouse_up(HWND hwnd, HDC dc, int x, int y)
 {
-	if (!g_Stats)
+	if (g_Stats != 1)
 		return;
 
 	if (g_sliderEditing)
