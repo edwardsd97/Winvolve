@@ -26,6 +26,9 @@
     <ClInclude Include="evolve.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="evolve_wid.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -38,6 +41,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="evolve_win.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="evolve_wid.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

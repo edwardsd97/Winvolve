@@ -209,7 +209,7 @@ float score_mate(creature_t *creatureA, creature_t *creatureB)
 	float score = 0;
 	float perGeneFactor = (1.0f / (float)(state->parms.genes * 2));
 
-	if (state->rebirth)
+	if (state->rebirth > 0)
 		perGeneFactor = 1.0f / (float)(state->parms.genes);
 
 	for (int i = 0; i < state->parms.genes; i++)
@@ -217,7 +217,7 @@ float score_mate(creature_t *creatureA, creature_t *creatureB)
 		// Prefer those that match my colors the most
 		score += matches_letter(state, creatureA->genes[i], creatureB->genes[i]) * perGeneFactor;
 
-		if (!state->rebirth)
+		if (state->rebirth <= 0)
 		{
 			// Prefer those that stand out against the environment
 			score += (1.0f - matches_letter(state, creatureB->genes[i], creature_environment(creatureB)->genes[i])) * perGeneFactor;
@@ -534,7 +534,7 @@ int find_best(creature_t *creature, score_func func, float *resultScore = NULL)
 	return result;
 }
 
-void die( creature_t *creature )
+void die( creature_t *creature, int deathReason )
 {
 	evolve_state_t *state = creature->state;
 
@@ -568,6 +568,7 @@ void die( creature_t *creature )
 
 		memset(creature, 0, sizeof(creature_t));
 		creature->state = state;
+		creature->death = deathReason;
 	}
 }
 
@@ -582,7 +583,7 @@ void survive( creature_t *creature )
 	creature->age++;
 	if (creature->age >= state->parms.ageDeath)
 	{
-		die(creature);
+		die(creature, 1);
 		return;
 	}
 
@@ -594,14 +595,14 @@ void survive( creature_t *creature )
 		if (eaten >= 0)
 		{
 			if (randf() < score * state->predation)
-				die(&state->creatures[eaten]);
+				die(&state->creatures[eaten], 2);
 		}
 	}
 	else if (state->rebirth < state->parms.rebirthGenerations - 3 && creature->age >= (state->parms.ageDeath * 0.5f))
 	{
 		// Rebirth: Die of old age with a bit of randomness toward the end
 		if ( randf() < (float)(creature->age) / ((float)state->parms.ageDeath))
-			die(creature);
+			die(creature, 1);
 	}
 }
 
@@ -712,7 +713,7 @@ void evolve_parms_default(evolve_parms_t *parms)
 	parms->ageDeath				= 5;
 	parms->ageMature			= 2;
 	parms->rebirthGenerations	= 15;
-	parms->predationLevel		= 0.75f;
+	parms->predationLevel		= 0.6f;
 	parms->procreationLevel		= 1.0f;
 	parms->speciesMatch			= 0.5f;
 	parms->speciesNew			= 6;
@@ -879,7 +880,7 @@ void evolve_asteroid(evolve_state_t *state)
 	for (int i = 0; i < state->popSize; i++)
 	{
 		if (state->creatures[state->orderTable[i]].genes[0])
-			die(&state->creatures[state->orderTable[i]]);
+			die(&state->creatures[state->orderTable[i]], 2);
 	}
 	state->rebirth = 0;
 }
@@ -890,7 +891,7 @@ void evolve_earthquake(evolve_state_t *state)
 	for (int i = 0; i < state->popSize; i++)
 	{
 		if (rand() % 4 == 0)
-			die(&state->creatures[state->orderTable[i]]);
+			die(&state->creatures[state->orderTable[i]], 2);
 	}
 
 	random_environments(state, state->environment, state->parms.popCols);

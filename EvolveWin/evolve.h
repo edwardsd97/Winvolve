@@ -1,4 +1,7 @@
 
+#ifndef EVOLVE_H
+#define EVOLVE_H
+
 #define GENES_MAX			(32)
 #define MAX_ALPHABET		(64)
 #define POP_ROWS_MAX		(32)
@@ -21,6 +24,7 @@ typedef struct creature_s
 	evolve_state_s *state;
 	int				species;
 	int				age;
+	int				death;
 	char			genes[GENES_MAX+1];
 
 } creature_t;
@@ -98,3 +102,5 @@ char	evolve_alphabet_index(evolve_state_t *state, char c);
 void	evolve_parms_default(evolve_parms_t *parms);
 void	evolve_asteroid(evolve_state_t *state);
 void	evolve_earthquake(evolve_state_t *state);
+
+#endif // EVOLVE_H

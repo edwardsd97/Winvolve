@@ -148,7 +148,7 @@ void resize(HWND hWnd = NULL)
 	if (g_Stats)
 	{
 		window.bottom = window.top + panelH;
-		window.right = window.left + cW + RIGHT_PANEL_SIZE;
+		window.right = window.left + cW + RIGHT_PANEL_SIZE + 5;
 	}
 	else
 	{
