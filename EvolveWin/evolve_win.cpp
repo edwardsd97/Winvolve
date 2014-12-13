@@ -22,7 +22,7 @@ HBITMAP hbmMem;
 HBITMAP hbmOld;
 
 const char *SAVE_NAME = "winvolve.sav";
-const int SAVE_VER = 3;
+const int SAVE_VER = 5;
 button_t *g_buttonClicking = NULL;
 parm_slider_t *g_sliderEditing = NULL;
 widget_t *g_Hovering = NULL;
@@ -39,6 +39,7 @@ const char *g_statNames[] =
 {
 	"Generations:",			// ES_GENERATIONS
 	"Species Now:",			// ES_SPECIES_NOW,
+	"Species Max:",			// ES_SPECIES_MAX,
 	"Species Ever:",		// ES_SPECIES_EVER
 	"Species Max Age:",		// ES_SPECIES_MAX_AGE,
 	"Extinctions:",			// ES_EXTINCTIONS,
@@ -215,6 +216,7 @@ void draw(HWND hwnd, HDC dc, int refresh)
 	int step = g_EvolveState.step;
 
 	GetClientRect(hwnd, &fill);
+	int clientW = fill.right;
 
 	static int last_col;
 
@@ -243,7 +245,7 @@ void draw(HWND hwnd, HDC dc, int refresh)
 					draw_text(dc, &rect, g_statNames[i], RGB(200, 200, 200));
 					rect.top += 20;
 				}
-				draw_text(dc, &rect, "Predation:", RGB(200, 200, 200));
+				draw_text(dc, &rect, "Predation Status:", RGB(200, 200, 200));
 			}
 
 			lastStats = 0;
@@ -327,7 +329,6 @@ void draw(HWND hwnd, HDC dc, int refresh)
 		lastPredation = g_EvolveState.predation > 0.0f && g_EvolveState.rebirth <= 0;
 
 		rect.top += 20;
-		rect.top += 20;
 
 		for (i = 0; i < sizeof(g_parmSliders) / sizeof(parm_slider_t); i++)
 		{
@@ -363,10 +364,9 @@ void draw(HWND hwnd, HDC dc, int refresh)
 					continue;
 			}
 
-			int clientW = fill.right;
 			fill.top = 20 * g_EvolveState.parms.popRows + 20 + 20 + 25 + (45 * i);
 			fill.bottom = fill.top + 45;
-			fill.right -= RIGHT_PANEL_SIZE + 1;
+			fill.right = clientW - (RIGHT_PANEL_SIZE + 1);
 			FillRect(dc, &fill, hBackBrush);
 
 			rect.left = 5;

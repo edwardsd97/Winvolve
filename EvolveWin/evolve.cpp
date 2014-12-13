@@ -651,6 +651,8 @@ void current_population( evolve_state_t *state )
 			state->stats[ES_SPECIES_NOW]++;
 		}
 	}
+
+	state->stats[ES_SPECIES_MAX] = max(state->stats[ES_SPECIES_MAX], state->stats[ES_SPECIES_EVER]);
 }
 
 void evolve_rebirth(evolve_state_t *state,bool randomizeEnvironment)
@@ -713,14 +715,14 @@ void evolve_parms_default(evolve_parms_t *parms)
 	parms->ageDeath				= 5;
 	parms->ageMature			= 2;
 	parms->rebirthGenerations	= 15;
-	parms->predationLevel		= 0.6f;
+	parms->predationLevel		= 0.55f;
 	parms->procreationLevel		= 1.0f;
 	parms->speciesMatch			= 0.5f;
 	parms->speciesNew			= 6;
 	parms->popRows				= 21;
 	parms->popCols				= 8;
 	parms->envChangeRate		= 100;
-	parms->historySpecies		= 8;
+	parms->historySpecies		= 9;
 
 	strcpy(parms->alphabet, "abcdefgh");
 	parms->genes = 8;
@@ -736,6 +738,7 @@ void evolve_parms_update(evolve_state_t *state, evolve_parms_t *parms)
 	state->parms.speciesMatch = parms->speciesMatch;
 	state->parms.speciesNew = parms->speciesNew;
 	state->parms.envChangeRate = parms->envChangeRate;
+	state->parms.historySpecies = parms->historySpecies;
 
 	state->predation = state->parms.predationLevel;
 

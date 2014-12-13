@@ -200,7 +200,7 @@ void move_parm_slider(HWND hwnd, HDC dc, parm_slider_t *slider, int x)
 		*((int*)(slider->data)) = (int)fval;
 
 	GetClientRect(hwnd, &fill);
-	g_EvolveParms.historySpecies = min(SPECIES_HIST_ROWS, (fill.bottom - ((g_EvolveParms.popRows + 1) * 20)) / 50);
+	g_EvolveParms.historySpecies = min(SPECIES_HIST_ROWS, (fill.bottom - ((g_EvolveParms.popRows + 1) * 20)) / 48);
 
 	evolve_parms_update(&g_EvolveState, &g_EvolveParms);
 
