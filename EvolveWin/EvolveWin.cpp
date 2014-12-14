@@ -6,12 +6,18 @@
 #include "evolve.h"
 #include <time.h>
 #include <math.h>
+#include <io.h>
+#include <stdio.h>
+#include <OleAuto.h>
+
+#pragma warning(disable:4996) // This function or variable may be unsafe.
 
 #define MAX_LOADSTRING 100
 
 // Global Variables:
 HINSTANCE hInst;								// current instance
 HWND g_hWnd;										// current window
+HACCEL hAccelTable;
 TCHAR szTitle[MAX_LOADSTRING];					// The title bar text
 TCHAR szWindowClass[MAX_LOADSTRING];			// the main window class name
 int g_Quit = 0;
@@ -45,17 +51,58 @@ void				evolve_win_mouse_move(HWND hwnd, HDC dc, int x, int y);
 void				evolve_win_mouse_down(HWND hwnd, HDC dc, int x, int y);
 void				evolve_win_mouse_up(HWND hwnd, HDC dc, int x, int y);
 
-int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
-                     _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPTSTR    lpCmdLine,
-                     _In_ int       nCmdShow)
+void update_title()
 {
+	static clock_t lastTitleUpdate = 0;
+	if (clock() - lastTitleUpdate > 1000)
+	{
+		char title[256];
+		BSTR unicodestr = SysAllocStringLen(NULL, 512);
+		sprintf(title, "Winvolve [G: %i SE: %i ME: %i]", g_EvolveState.stats[ES_GENERATIONS], g_EvolveState.stats[ES_SPECIES_EVER], g_EvolveState.stats[ES_EXTINCTIONS_MASS]);
+		::MultiByteToWideChar(CP_ACP, 0, title, -1, unicodestr, 512);
+		SetWindowText(g_hWnd, unicodestr);
+		SysFreeString(unicodestr);
+		lastTitleUpdate = clock();
+	}
+}
+
+void update_evolve()
+{
+	static clock_t lastP = 0;
+	static WINDOWPLACEMENT p;
+
+	// start timer
+	timer_mark();
+
+	if (!lastP || clock() - lastP > 1000)
+	{
+		GetWindowPlacement(g_hWnd, &p);
+		lastP = clock();
+	}
+
+	evolve_win_tick();
+
+	if (p.showCmd != SW_SHOWMINIMIZED && (g_EvolveState.step % 2 == 0))
+		evolve_win_draw(g_hWnd);
+
+	// Clamp it when viewing creatures so it doesnt evolve so fast you can't see whats going on
+	float dur = (float) timer_mark();
+	float stepCnt = (float)(g_EvolveState.parms.popCols * g_EvolveState.parms.popRows * 2);
+	float genPerSec = 3;
+	float minMs = (1.0f / genPerSec) / stepCnt;
+	if (g_Stats != 2 && dur < minMs)
+		Sleep( max( 1, (DWORD) (minMs - dur) ) );
+}
+
+int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
+	_In_opt_ HINSTANCE hPrevInstance,
+	_In_ LPTSTR    lpCmdLine,
+	_In_ int       nCmdShow)
+{
+	MSG msg;
+
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
-
- 	// TODO: Place code here.
-	MSG msg;
-	HACCEL hAccelTable;
 
 	// Initialize global strings
 	LoadString(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
@@ -63,40 +110,20 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 	MyRegisterClass(hInstance);
 
 	// Perform application initialization:
-	if (!InitInstance (hInstance, nCmdShow))
+	if (!InitInstance(hInstance, nCmdShow))
 	{
 		return FALSE;
 	}
 
-	hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_EVOLVEWIN));
+	hAccelTable = LoadAccelerators(hInst, MAKEINTRESOURCE(IDC_EVOLVEWIN));
 
-	clock_t nextTick = clock() + 1;
-	WINDOWPLACEMENT p;
-
-	// Main message loop:
 	while (!g_Quit)
 	{
-		GetWindowPlacement(g_hWnd, &p);
+		update_evolve();
 
-		if (clock() >= nextTick)
-		{
-			// Clamp to a maximum generations per second
-			int generationsPerSecond = 3;
-			clock_t start = clock();
-			
-			evolve_win_tick();
+		update_title();
 
-			if (g_EvolveState.step % 2 == 0)
-				evolve_win_draw(g_hWnd);
-
-			clock_t end = clock();
-			if ((p.showCmd == SW_SHOWMINIMIZED) || (g_Stats == 2))
-				nextTick = 0;
-			else
-				nextTick = clock() + max(1, int(ceil((1000.0f / float(generationsPerSecond)) / float(g_EvolveState.popSize * 2))) - (end - start));
-		}
-
-		if (PeekMessage(&msg, NULL, 0, 0, 1))
+		if (PeekMessage(&msg, g_hWnd, 0, 0, 1))
 		{
 			if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
 			{
@@ -106,8 +133,10 @@ int APIENTRY _tWinMain(_In_ HINSTANCE hInstance,
 		}
 	}
 
-	return (int) msg.wParam;
+	return (int)0;
 }
+
+
 
 //
 //  FUNCTION: MyRegisterClass()
@@ -137,6 +166,7 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
 
 void resize(HWND hWnd = NULL)
 {
+	RECT windowOld;
 	RECT window;
 	int cW;
 	int cH;
@@ -144,7 +174,8 @@ void resize(HWND hWnd = NULL)
 	if (hWnd == NULL)
 		hWnd = g_hWnd;
 
-	GetWindowRect(hWnd, &window);
+	GetWindowRect(hWnd, &windowOld);
+	memcpy(&window, &windowOld, sizeof(RECT));
 
 	int panelH = 950;
 
@@ -167,7 +198,34 @@ void resize(HWND hWnd = NULL)
 		window.right = window.left + cW;
 	}
 
-	MoveWindow(hWnd, window.left, window.top, window.right - window.left, window.bottom - window.top, true);
+	if (memcmp(&window, &windowOld, sizeof(RECT)))
+		MoveWindow(hWnd, window.left, window.top, window.right - window.left, window.bottom - window.top, true);
+}
+
+void SetStdOutToNewConsole()
+{
+	// allocate a console for this app
+	AllocConsole();
+
+	// redirect unbuffered STDOUT to the console
+	HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+	int fileDescriptor = _open_osfhandle((intptr_t)consoleHandle, 0);// _O_TEXT);
+	FILE *fp = _fdopen(fileDescriptor, "w");
+	*stdout = *fp;
+	setvbuf(stdout, NULL, _IONBF, 0);
+
+	// give the console window a nicer title
+	SetConsoleTitle(L"Debug Output");
+
+	// give the console window a bigger buffer size
+	CONSOLE_SCREEN_BUFFER_INFO csbi;
+	if (GetConsoleScreenBufferInfo(consoleHandle, &csbi))
+	{
+		COORD bufferSize;
+		bufferSize.X = csbi.dwSize.X;
+		bufferSize.Y = 9999;
+		SetConsoleScreenBufferSize(consoleHandle, bufferSize);
+	}
 }
 
 //
@@ -197,6 +255,8 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    ShowWindow(g_hWnd, nCmdShow);
    UpdateWindow(g_hWnd);
 
+   //SetStdOutToNewConsole();
+
    return TRUE;
 }
 
@@ -214,9 +274,10 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	int wmId, wmEvent;
 	int x, y;
-	PAINTSTRUCT ps;
-	HDC hdc;
 	RECT clRect;
+	HDC hdc;
+	PAINTSTRUCT ps;
+
 
 	if (message >= WM_MOUSEFIRST && message <= WM_MOUSELAST)
 	{
@@ -324,4 +385,20 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 		break;
 	}
 	return (INT_PTR)FALSE;
+}
+
+
+double timer_mark(int timerIndex /* = 0*/)
+{
+	if (timerIndex < 0 || timerIndex > 15)
+		return 0.0;
+
+	static LARGE_INTEGER last[16] = { 0 };
+	LARGE_INTEGER now;
+	LARGE_INTEGER freq;
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&now);
+	double elapsedTime = (now.QuadPart - last[timerIndex].QuadPart) * 1000.0 / freq.QuadPart;
+	QueryPerformanceCounter(&last[timerIndex]);
+	return elapsedTime;
 }

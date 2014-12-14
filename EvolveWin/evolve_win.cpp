@@ -5,7 +5,6 @@
 #include <time.h>
 #include <stdio.h>
 #include <math.h>
-#include <OleAuto.h>
 #include "evolve_wid.h"
 
 bool initialized = false;
@@ -22,7 +21,7 @@ RECT hdcMemRect;
 HBITMAP hbmMem;
 HBITMAP hbmOld;
 
-const char *SAVE_NAME = "winvolve.sav";
+const char *SAVE_NAME = "Winvolve.sav";
 const int SAVE_VER = 5;
 button_t *g_buttonClicking = NULL;
 parm_slider_t *g_sliderEditing = NULL;
@@ -246,16 +245,21 @@ bool draw(HWND hwnd, HDC dc, int refresh)
 		bool drewSomething = false;
 		static int lastGen = 0;
 
-		if (lastGen != g_EvolveState.stats[ES_GENERATIONS])
+		if (refresh || (lastGen != g_EvolveState.stats[ES_GENERATIONS]))
 		{
 			// Just stats
-			FillRect(dc, &fill, hBackBrush);
+			if (refresh)
+				FillRect(dc, &fill, hBackBrush);
 
 			fill.top += 10;
 			fill.left += 10;
 			fill.right -= 10;
 
-			draw_stats(dc, true, true, &fill);
+			int top = fill.top;
+			if ( refresh )
+				draw_stats(dc, true, false, &fill);
+			fill.top = top;
+			draw_stats(dc, false, true, &fill);
 
 			lastGen = g_EvolveState.stats[ES_GENERATIONS];
 
@@ -500,26 +504,15 @@ void evolve_win_draw(HWND hwnd)
 	if (!initialized)
 		return;
 
-	char title[256];
-	BSTR unicodestr = SysAllocStringLen(NULL, 512);
-	sprintf(title, "Winvolve [G: %i SE: %i ME: %i]", g_EvolveState.stats[ES_GENERATIONS], g_EvolveState.stats[ES_SPECIES_EVER], g_EvolveState.stats[ES_EXTINCTIONS_MASS]);
-	::MultiByteToWideChar(CP_ACP, 0, title, -1, unicodestr, 512);
-	SetWindowText(hwnd, unicodestr);
-
-	WINDOWPLACEMENT p;
-	GetWindowPlacement(hwnd, &p);
-	if (p.showCmd == SW_SHOWMINIMIZED)
-		return;
-
 	int refresh = g_Refresh;
 	g_Refresh = 0;
 
 	// Avoid flickering by drawing to offscreen HDC then BitBlt to window dc
-	HDC dc = GetDC(hwnd);
 	RECT clRect;
 	GetClientRect(hwnd, &clRect);
 	if (clRect.right != hdcMemRect.right || clRect.bottom != hdcMemRect.bottom)
 	{
+		HDC dc = GetDC(hwnd);
 		if (hbmOld)
 			SelectObject(hdcMem, hbmOld);
 		if (hbmMem)
@@ -534,12 +527,16 @@ void evolve_win_draw(HWND hwnd)
 		BitBlt(hdcMem, clRect.left, clRect.top, clRect.right - clRect.left, clRect.bottom - clRect.top, dc, 0, 0, SRCCOPY);
 
 		memcpy(&hdcMemRect, &clRect, sizeof(clRect));
+
+		ReleaseDC(hwnd, dc);
 	}
 
-	if ( draw(hwnd, hdcMem, refresh) || refresh )
+	if ( draw(hwnd, hdcMem, refresh) )
+	{
+		HDC dc = GetDC(hwnd);
 		BitBlt(dc, clRect.left, clRect.top, clRect.right - clRect.left, clRect.bottom - clRect.top, hdcMem, 0, 0, SRCCOPY);
-
-	ReleaseDC(hwnd, dc);
+		ReleaseDC(hwnd, dc);
+	}
 }
 
 void evolve_win_mouse_move(HWND hwnd, HDC dc, int x, int y)

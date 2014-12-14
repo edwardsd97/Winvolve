@@ -17,5 +17,6 @@
 #include <memory.h>
 #include <tchar.h>
 
+double timer_mark(int timerIndex = 0);
 
 // TODO: reference additional headers your program requires here

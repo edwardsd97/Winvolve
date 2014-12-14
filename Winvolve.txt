@@ -1,0 +1,151 @@
+
+[Winvolve]
+Copyright (C) 2014 - Dan Edwards ( edwardsd97@gmail.com )
+================
+A simple experimentation tool to explore how life can change form over time 
+according to the environment they live within.
+
+ - A creature is represented by a sequence of letters. 
+ 
+ - The environment is also represented by a sequence of letters.
+
+ - When two creatures mate to create a new creature it will contain the same 
+   letter sequence as its parents but choosing randomly from one or the other
+   as it copies their "genes." Then one new mutation occurs.
+
+ - A mutation consist of only one of the following:
+     - Changing a single letter by one value higher or lower in the alphabet.
+     - Changing a single letter's case.
+     
+ - Creatures may only mate with other creatures of the same species and only
+   once both creatures have reached maturity.
+
+ - When a creature chooses another to mate with it does so by selecting one
+   that most matches itself but also most contrasts with the environment.
+   In this way it seeks to mate with those that are most vibrant.
+
+ - While this is going on the creatures are also getting eaten. 
+   Creatures are eaten that most contrast with the environment.
+   
+ - The end result is that the creatures evolve to match their environment
+   but also maintain bands of contrast with it to help them stand out for
+   mating.
+   
+Statistics
+===============
+- Generations: The number of generations that have occured 
+   (one generation is complete when each creature has had a chance to die/mate)
+
+- Species Now: The number of different species alive right now
+
+- Species Max: The highest number of differenct species alive at any one
+   time throughout history.
+
+- Species Ever: The number of species that have existed throughout history.
+
+- Extinctions: The number of species that have died out completely
+
+- Mass Extinctions: The number of times that all species have died out.
+   When this occurs a "Rebirth" is triggered where the last species alive
+   is born again with a single mutation but in a new environment and given
+   a number of generations to mate without predation. This also happens when
+   the simulation first starts but with completely random species.
+
+- Predation Status: Indicates if creatures are being eaten currently or not
+
+Species History
+===============
+Each time a new species evolves it will appear here as a new row.
+Each entry shows a random sampling of that species as well as the environment
+it was living it at the time. Each time the environment changes a new entry
+is added for each species showing how many generations old that species is.
+
+Controls
+===============
+- Predation: All predation is a random chance based on how much a creature
+  contrasts with the environment. This chance is multiplied with this value
+  to allow the intensity of predation to be scaled up or down.
+
+- Procreation: All mating is a random chance based on how much a creature
+  contrasts with the environment and also matches its mate. 
+  This chance is multiplied with this value to allow the intensity of 
+  procreation to be scaled up or down.
+ 
+- Species Match Req: A creature that is the same letter sequence as another
+  is considered a 100% match or 1.0 match rating. A rating of 0 would be 
+  two creatures that have the exact opposite letters in their sequence.
+  (the letter alphabet is treated as a circle where the first and last letters
+  are considered adjacent) This value specifies the minimum match rating 
+  between two creatures needed in order to mate.
+  
+- Age of Death: Each generation a creature grows in age. Once it has reached
+  this many generations since its birth it dies of old age.
+
+- Age of Maturiry: Each generation a creature grows in age. Once it has reached
+  this many generations since its birth it can begin mating with others.
+  
+- Rebirth Generations: The number of generations the creatures are allowed
+  to procreate after a mass extinction without predation.
+  
+- Min Species Pop: The minimum number of creatures needed that differ too much
+  from the rest of that species to define a new species. When this happens
+  these new creatures are assigned a new species and can only mate with 
+  themselves.
+  
+- Enviro Change Rate: The number of generations allowed between environment 
+  changes. When the environment changes it becomes something completely new
+  at random. The environment is always represented along the top of the field.
+  When this happens creatures along the border between environments have a
+  50% chance to swap places with whatever is on the other side of the border.
+  
+- Gene Count: The number of gene letters that define any given creature. 
+  (changing this value requires the simulation to restart)
+  
+- Population Rows: The number of creature rows in the field
+  (changing this value requires the simulation to restart)
+
+- Population Cols: The number of creature columns in the field
+  (changing this value requires the simulation to restart)
+  
+Buttons:
+===============
+- Defaults: Resets all controls to their defualt values.
+  (clicking this requires the simulation to restart)
+
+- Save: Saves the state of the simulation to disk
+  (happens automatically when application closes)
+
+- Load: Loads the state of the simulation from disk
+  (happens automatically when application starts)
+
+- Predation: Allows you to toggle predation on and off
+
+- Earthquake: Triggers a change in environment and also
+  kills off about 25% of population
+
+- Asteroid: Kills all creatures and triggers a mass extinction rebirth
+
+Menu
+===============
+- File -> Stats : Cycles the display mode between three states
+
+	- Full stats: All controls are displayed	
+	- No stats: Only the field of creatures are displayed	
+	- Only stats: Use this mode to increase the speed of the simulation	  
+
+- File -> Predation : Same as Predation button
+
+- File -> Earthquake : Same as Earthquake button
+
+- File -> Asteroid : Same as Asteroid button
+
+Some things to try
+===============
+- Turn off predation and watch as the creatures quickly evolve to contrast 
+  with the environment. Then turn it back on and watch them die out quickly
+  as they all stand out like sore thumbs.
+  
+- Change the number of genes and see how that affects the rate of evolution.
+  Try to find the right level of predation and procreation so that creatures
+  do not die out completely too often but still evolve quickly from one
+  environment to the next.
